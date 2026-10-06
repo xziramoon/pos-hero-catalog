@@ -7,7 +7,7 @@ const { BrowserWindow, screen, globalShortcut, Notification } = require('electro
 const PRELOAD = path.join(__dirname, '..', 'preload-catalog.js');
 const PAGE = path.join(__dirname, '..', 'renderer', 'catalog', 'index.html');
 
-function createCatalogWindow({ getMainWindow, configStore }) {
+function createCatalogWindow({ getMainWindow, configStore, onVisibility }) {
   let win = null;
   let ready = false;
   let quitting = false;
@@ -79,6 +79,8 @@ function createCatalogWindow({ getMainWindow, configStore }) {
     }
   }
 
+  const notifyVis = (v) => { try { if (onVisibility) onVisibility(v); } catch (e) { console.warn('[catalog] visibility cb', e.message); } };
+
   function create() {
     const c = cfg().window;
     const b = computeInitialBounds();
@@ -110,12 +112,16 @@ function createCatalogWindow({ getMainWindow, configStore }) {
     win.on('resize', saveBoundsSoon);
     win.on('move', saveBoundsSoon);
     win.on('show', sendFocusSearch);
-    win.on('closed', () => { win = null; ready = false; });
+    win.on('show', () => notifyVis(true));
+    win.on('hide', () => notifyVis(false));
+    win.on('minimize', () => notifyVis(false));
+    win.on('restore', () => notifyVis(true));
+    win.on('closed', () => { win = null; ready = false; notifyVis(false); });
     win.webContents.on('render-process-gone', (_e, d) => {
       console.warn('[catalog] renderer gone:', d && d.reason);
       // Recreate lazily on next open; never touch the main POS window.
       try { win.destroy(); } catch (_) { /* ignore */ }
-      win = null; ready = false;
+      win = null; ready = false; notifyVis(false);
     });
     win.webContents.on('did-finish-load', () => {
       ready = true;
@@ -216,6 +222,7 @@ function createCatalogWindow({ getMainWindow, configStore }) {
   return {
     show, hide, toggle, togglePin, setTheme, send, initHotkey, registerHotkey, dispose,
     getPinState: () => pinned,
+    isVisible: () => !!(win && !win.isDestroyed() && win.isVisible() && !win.isMinimized()),
     getHotkey: () => ({ accelerator: activeKey || cfg().window.hotkey, active: !!activeKey, error: lastError }),
     getWindow: () => (win && !win.isDestroyed() ? win : null),
     isOwnSender: (wc) => !!(win && !win.isDestroyed() && wc === win.webContents)

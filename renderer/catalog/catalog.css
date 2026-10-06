@@ -17,6 +17,21 @@ html, body.cat-body { height: 100%; overflow: hidden; }
 .cat-app [data-icon] { display: inline-flex; align-items: center; justify-content: center; }
 .hero-titlebar { position: static; flex: 0 0 auto; }
 .hero-titlebar-drag .cat-bag { color: var(--hero-gold-bright); align-self: center; filter: drop-shadow(0 0 4px var(--hero-glow)); }
+/* sync status LED (titlebar) */
+.cat-sync { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px; margin-right: 6px; font-size: 11px; color: var(--hero-text-dim); background: transparent; border: 1px solid var(--hero-border-dk); border-radius: 2px; cursor: pointer; -webkit-app-region: no-drag; align-self: center; white-space: nowrap; }
+.cat-sync:hover { color: var(--hero-text); border-color: var(--hero-border-lt); }
+.cat-sync .led { width: 9px; height: 9px; border-radius: 50%; background: var(--hero-text-faint); box-shadow: 0 0 0 1px rgba(0,0,0,0.5) inset; }
+.cat-sync[data-state="ok"] .led { background: var(--success); box-shadow: 0 0 6px var(--success); }
+.cat-sync[data-state="pending"] .led { background: var(--warning); box-shadow: 0 0 6px var(--warning); }
+.cat-sync[data-state="offline"] .led { background: var(--danger); box-shadow: 0 0 6px var(--danger); }
+.cat-sync[data-state="readonly"] .led { background: var(--info, #38bdf8); }
+.cat-btn-wide { width: 100%; }
+.cat-field .ok { color: var(--success); font-size: 12px; }
+.cat-field-row { display: flex; gap: 6px; }
+.cat-field-row input { flex: 1; min-width: 0; }
+.cat-conn-msg { font-size: 12px; min-height: 16px; color: var(--hero-text-dim); white-space: pre-wrap; }
+.cat-conn-msg.bad { color: var(--danger); }
+.cat-conn-msg.good { color: var(--success); }
 .cat-local-tag { font-size: 10px; color: var(--hero-text-faint); border: 1px solid var(--hero-border-dk); padding: 0 5px; border-radius: 2px; white-space: nowrap; align-self: center; }
 .hero-tbtn { font-family: inherit; padding: 0; }
 .hero-tbtn#btnPin.is-pinned { background: linear-gradient(180deg, var(--hero-active-2), var(--hero-active-1)); box-shadow: 0 0 8px var(--hero-glow); }

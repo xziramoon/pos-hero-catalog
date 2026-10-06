@@ -52,10 +52,24 @@ function sanitizeConfigPatch(patch) {
   if (!patch || typeof patch !== 'object') return {};
   const p = JSON.parse(JSON.stringify(patch));
   if (p.window) delete p.window.hotkey; // use setHotkey
-  // TODO(Phase 4): the write token is set via a dedicated main-process handler, never through setConfig.
-  if (p.worker) delete p.worker.writeToken;
+  // The write token is set via the dedicated catalog:set-write-token handler, never through setConfig.
+  // Only url + key may come from the renderer (poll/timeouts live in config.json).
+  if (p.worker) {
+    const w = {};
+    if (typeof p.worker.url === 'string') w.url = p.worker.url.trim().slice(0, 300);
+    if (typeof p.worker.key === 'string' && (p.worker.key === '' || /^[A-Za-z0-9_-]{1,128}$/.test(p.worker.key))) w.key = p.worker.key;
+    p.worker = w;
+  }
   delete p.hasWriteToken;
   return p;
 }
 
-module.exports = { sanitizeMetaPatch, sanitizeItemInput, sanitizeConfigPatch, DEFAULT_CAT };
+// Write token from the dedicated IPC: '' clears it, otherwise 16-256 visible ASCII chars. Returns null if invalid.
+function sanitizeWriteToken(t) {
+  if (typeof t !== 'string') return null;
+  const v = t.trim();
+  if (v === '') return '';
+  return /^[!-~]{16,256}$/.test(v) ? v : null;
+}
+
+module.exports = { sanitizeMetaPatch, sanitizeItemInput, sanitizeConfigPatch, sanitizeWriteToken, DEFAULT_CAT };
