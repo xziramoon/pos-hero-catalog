@@ -37,7 +37,8 @@ class OffscreenCanvasMock {
   getContext() {
     const c = this;
     return {
-      imageSmoothingEnabled: true, imageSmoothingQuality: 'low',
+      imageSmoothingEnabled: true, imageSmoothingQuality: 'low', fillStyle: '#000000',
+      fillRect(x, y, w, h) { const v = parseInt(this.fillStyle.slice(1), 16); for (let i = 0; i < c.width * c.height; i++) { c.buf[i * 4] = v >> 16; c.buf[i * 4 + 1] = (v >> 8) & 255; c.buf[i * 4 + 2] = v & 255; c.buf[i * 4 + 3] = 255; } },
       drawImage(src, dx, dy, dw, dh) { c.buf.set(resample(src.buf || src._data, src.width, src.height, dw, dh)); },
       putImageData(id) { c.buf.set(id.data); },
       getImageData() { return new ImageDataMock(new Uint8ClampedArray(c.buf), c.width, c.height); }
@@ -140,6 +141,41 @@ async function main() {
     const r13 = await waitFor((m) => m.id === 13);
     assert.strictEqual(r13.ok, true, r13.error);
     for (const id of [10, 11, 12]) { const m = posted.find((x) => x.id === id); assert.ok(m && m.cancelled, 'id ' + id + ' should be cancelled'); }
+  });
+
+  await t('a coalesced/cancelled request that carries the image still feeds the cache', async () => {
+    send({ id: 30, type: 'preview', sourceId: 'A', file, edit: {} });
+    send({ id: 31, type: 'preview', sourceId: 'A', edit: { brightness: 3 } });
+    const r = await waitFor((m) => m.id === 31);
+    assert.strictEqual(r.ok, true, r.error);
+    assert.ok(posted.find((m) => m.id === 30).cancelled);
+    // previews of a DIFFERENT source are not coalesced away
+    send({ id: 32, type: 'preview', sourceId: 'A', edit: {} });
+    send({ id: 33, type: 'preview', sourceId: 'B', file, edit: {} });
+    const r33 = await waitFor((m) => m.id === 33);
+    assert.strictEqual(r33.ok, true, r33.error);
+    assert.strictEqual(posted.find((m) => m.id === 32).ok, true);
+  });
+
+  await t('new bytes under the same sourceId are re-decoded; origMax change re-renders', async () => {
+    const other = makeAll()['web-white'];
+    const bytes2 = jpeg.encode({ data: Buffer.from(other.data), width: other.width, height: other.height }, 90).data;
+    send({ id: 40, type: 'process', sourceId: 'A', file: new Blob([bytes2], { type: 'image/jpeg' }), edit: {} });
+    const r = await waitFor((m) => m.id === 40);
+    assert.strictEqual(r.ok, true, r.error);
+    assert.deepStrictEqual([r.w, r.h], [800, 800]);
+    send({ id: 41, type: 'process', sourceId: 'A', cfg: { origMax: 400 }, edit: {} });
+    const r2 = await waitFor((m) => m.id === 41);
+    assert.strictEqual(r2.ok, true, r2.error);
+    assert.deepStrictEqual([r2.w, r2.h], [400, 400]);
+  });
+
+  await t('preview and process share the same analyze size', async () => {
+    send({ id: 50, type: 'process', sourceId: 'A', cfg: {}, edit: {} });
+    const p = await waitFor((m) => m.id === 50);
+    send({ id: 51, type: 'preview', sourceId: 'A', cfg: {}, edit: {} });
+    const v = await waitFor((m) => m.id === 51);
+    assert.deepStrictEqual([v.info.analyzeW, v.info.analyzeH], [p.info.analyzeW, p.info.analyzeH]);
   });
 
   await t('errors are reported per request', async () => {
