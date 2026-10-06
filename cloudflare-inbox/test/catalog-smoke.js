@@ -28,6 +28,11 @@ const HASH = rnd(64).replace(/[^a-f0-9]/g, 'a').padEnd(64, 'b');
   const init2b = await init2.json();
   check('second init is 409', init2.status === 409 && init2b.error === 'already_initialized', init2b);
 
+  // /init race: two parallel inits on a fresh key, exactly one may win
+  const RK = 'CatRace' + rnd(33);
+  const race = await Promise.all([1, 2].map(i => fetch(`${BASE}/catalog/${RK}/init`, { method: 'POST', headers: { 'X-Catalog-Write': 'race-token-' + i + 'x'.repeat(10) } })));
+  check('parallel init: exactly one 200 and one 409', race.map(r => r.status).sort().join() === '200,409', race.map(r => r.status));
+
   // auth
   const noTok = await post([mk('A001')], {});
   const noTokBody = await noTok.json();
@@ -53,6 +58,9 @@ const HASH = rnd(64).replace(/[^a-f0-9]/g, 'a').padEnd(64, 'b');
   const ch3 = await jget('/changes?since=0&limit=2');
   check('limit paginates with more=true', ch3.items.length === 2 && ch3.more === true && ch3.rev === 2, ch3);
 
+  const ahead = await jget('/changes?since=9999');
+  check('since > current rev -> resetRequired', ahead.resetRequired === true, ahead);
+
   // concurrent edits from two devices
   const newer = mk('A001', { updatedAt: t0 + 1000, updatedBy: 'dev-b', name: 'ก-B' });
   const older = mk('A001', { updatedAt: t0 + 500, updatedBy: 'dev-a', name: 'ก-A-late' });
@@ -66,6 +74,11 @@ const HASH = rnd(64).replace(/[^a-f0-9]/g, 'a').padEnd(64, 'b');
   check('tie on updatedAt: larger updatedBy wins', tieWin.accepted.length === 1, tieWin);
   const resend = await (await post([mk('A001', { updatedAt: t0 + 1000, updatedBy: 'dev-c', name: 'tie-c' })])).json();
   check('exact resend is idempotent', resend.accepted.length === 1 && resend.accepted[0].rev === tieWin.accepted[0].rev, resend);
+
+  const sameStampDiff = await (await post([mk('A001', { updatedAt: t0 + 1000, updatedBy: 'dev-c', name: 'tie-c-zzz' })])).json();
+  check('same ts+device, different content: deterministic (larger JSON wins, not silently dropped)', sameStampDiff.accepted.length === 1, sameStampDiff);
+  const sameStampBack = await (await post([mk('A001', { updatedAt: t0 + 1000, updatedBy: 'dev-c', name: 'tie-c' })])).json();
+  check('same ts+device, smaller JSON loses as stale', sameStampBack.rejected.length === 1 && sameStampBack.rejected[0].reason === 'stale', sameStampBack);
 
   // tombstone
   const del = await (await post([mk('A002', { updatedAt: t0 + 2000, deleted: true })])).json();
@@ -110,6 +123,7 @@ const HASH = rnd(64).replace(/[^a-f0-9]/g, 'a').padEnd(64, 'b');
   const g = await fetch(`${root}/img/${HASH}/thumb-v3`);
   const gb = new Uint8Array(await g.arrayBuffer());
   check('GET returns same bytes', g.status === 200 && gb.length === jpeg.length && gb.every((b, i) => b === jpeg[i]));
+  check('GET nosniff', g.headers.get('X-Content-Type-Options') === 'nosniff');
   check('GET has immutable cache header', /immutable/.test(g.headers.get('Cache-Control') || '') && /max-age=31536000/.test(g.headers.get('Cache-Control') || ''), g.headers.get('Cache-Control'));
   check('GET keeps stored content-type', g.headers.get('Content-Type') === 'image/webp', g.headers.get('Content-Type'));
   check('GET orig cached immutable', /immutable/.test((await fetch(`${root}/img/${HASH}/orig`)).headers.get('Cache-Control') || ''));
@@ -131,7 +145,7 @@ const HASH = rnd(64).replace(/[^a-f0-9]/g, 'a').padEnd(64, 'b');
   check('different key sees nothing', oh.itemCount === 0 && oh.rev === 0, oh);
   check('other key cannot read this key image', (await fetch(`${BASE}/catalog/${otherKey}/img/${HASH}/orig`)).status === 404);
   const pf = await fetch(root + '/items', { method: 'OPTIONS' });
-  check('CORS preflight allows X-Catalog-Write', pf.status === 200 && /X-Catalog-Write/.test(pf.headers.get('Access-Control-Allow-Headers') || '') && pf.headers.get('Access-Control-Allow-Origin') === '*');
+  check('CORS preflight allows X-Catalog-Write, 204, max-age', pf.status === 204 && pf.headers.get('Access-Control-Max-Age') === '86400' && /X-Catalog-Write/.test(pf.headers.get('Access-Control-Allow-Headers') || '') && pf.headers.get('Access-Control-Allow-Origin') === '*');
   check('CORS header on responses', (await fetch(root + '/health')).headers.get('Access-Control-Allow-Origin') === '*');
   const nf = await fetch(root + '/nope');
   check('unknown endpoint -> 404 json', nf.status === 404 && (await nf.json()).error === 'not_found');

@@ -55,7 +55,7 @@ function safeEqual(a, b) {
 export async function handleCatalogRequest(request, env) {
   const url = new URL(request.url);
   if (url.pathname !== '/catalog' && !url.pathname.startsWith('/catalog/')) return null;
-  if (request.method === 'OPTIONS') return new Response(null, { headers: CORS });
+  if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: Object.assign({ 'Access-Control-Max-Age': '86400' }, CORS) });
   const m = url.pathname.match(CATALOG_PATH_RE);
   if (!m) return err(400, 'invalid_key', 'Catalog Key ต้องยาว 32-128 ตัว ใช้ A-Z a-z 0-9 _ - เท่านั้น');
   if (!env.CATALOG) return err(500, 'not_configured', 'Worker ยังไม่ได้ผูก Durable Object CATALOG');
@@ -68,6 +68,11 @@ export class Catalog {
     this.env = env;
     this.sql = ctx.storage.sql;
     this.sql.exec('CREATE TABLE IF NOT EXISTS items (id TEXT PRIMARY KEY, rev INTEGER, updated_at INTEGER, updated_by TEXT, deleted INTEGER, data TEXT)');
+    // written_at = server time of the last write (tombstone retention must not trust client clocks)
+    if (!this.sql.exec('PRAGMA table_info(items)').toArray().some(c => c.name === 'written_at')) {
+      this.sql.exec('ALTER TABLE items ADD COLUMN written_at INTEGER');
+      this.sql.exec('UPDATE items SET written_at = ?', Date.now());
+    }
     this.sql.exec('CREATE INDEX IF NOT EXISTS items_rev ON items(rev)');
     this.sql.exec('CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT)');
   }
@@ -92,7 +97,11 @@ export class Catalog {
     try {
       const res = await this.route(request, url, key, rest, method);
       // Replying before the request body was read can abort the stream on the runtime; drain it first.
-      if (request.body && !request.bodyUsed) await request.arrayBuffer().catch(() => {});
+      const declared = Number(request.headers.get('Content-Length'));
+      if (request.body && !request.bodyUsed) {
+        if (declared > 0 && declared <= MAX_IMAGE + 65536) await request.arrayBuffer().catch(() => {});
+        else await request.body.cancel().catch(() => {});
+      }
       return res;
     } catch (e) {
       console.log('[catalog] error', (e && e.stack) || e);
@@ -101,7 +110,6 @@ export class Catalog {
   }
 
   async route(request, url, key, rest, method) {
-    {
       this.maybePurge();
       if (rest === '/health' && method === 'GET') return this.health();
       if (rest === '/init' && method === 'POST') return await this.init(request);
@@ -118,7 +126,6 @@ export class Catalog {
         return err(405, 'method_not_allowed', 'ใช้ GET หรือ PUT เท่านั้น');
       }
       return err(404, 'not_found', 'ไม่พบ endpoint นี้ หรือใช้ method ไม่ถูกต้อง');
-    }
   }
 
   async bodyOrError(request) {
@@ -145,14 +152,16 @@ export class Catalog {
   }
 
   async init(request) {
-    if (this.kvGet('writeTokenHash')) return err(409, 'already_initialized', 'Catalog Key นี้ตั้ง write token ไว้แล้ว');
     let token = request.headers.get('X-Catalog-Write');
     if (!token) {
       const { body } = await this.bodyOrError(request);
       if (body && typeof body.writeToken === 'string') token = body.writeToken;
     }
     if (!token || token.length < 16 || token.length > 256) return err(400, 'bad_token', 'write token ต้องยาว 16-256 ตัวอักษร (ส่งใน header X-Catalog-Write)');
-    this.kvSet('writeTokenHash', await sha256Hex(token));
+    const hash = await sha256Hex(token);
+    // check-and-set with no await in between, so concurrent inits cannot both succeed
+    if (this.kvGet('writeTokenHash')) return err(409, 'already_initialized', 'Catalog Key นี้ตั้ง write token ไว้แล้ว');
+    this.kvSet('writeTokenHash', hash);
     if (!this.kvGet('schemaVersion')) this.kvSet('schemaVersion', 1);
     return json({ ok: true, rev: this.currentRev(), serverTime: Date.now() });
   }
@@ -163,7 +172,7 @@ export class Catalog {
     const rev = this.currentRev();
     const serverTime = Date.now();
     const horizon = Number(this.kvGet('tombstoneHorizonRev')) || 0;
-    if (since > 0 && since < horizon) return json({ resetRequired: true, items: [], rev, more: false, serverTime });
+    if (since > rev || (since > 0 && since < horizon)) return json({ resetRequired: true, items: [], rev, more: false, serverTime });
     const rows = this.sql.exec('SELECT data, rev FROM items WHERE rev > ? ORDER BY rev LIMIT ?', since, limit + 1).toArray();
     const more = rows.length > limit;
     if (more) rows.pop();
@@ -202,12 +211,18 @@ export class Catalog {
         if (row) {
           const current = Object.assign(JSON.parse(row.data), { rev: row.rev });
           // Exact resend (outbox retry): acknowledge without bumping rev.
-          if (current.updatedAt === item.updatedAt && current.updatedBy === item.updatedBy) { accepted.push({ id: item.id, rev: row.rev }); continue; }
-          if (mergeItem(current, item) !== item) { rejected.push({ id: item.id, reason: 'stale', current }); continue; }
+          const sameStamp = current.updatedAt === item.updatedAt && current.updatedBy === item.updatedBy;
+          if (sameStamp) {
+            const { rev: _r, ...stored } = current;
+            const a = JSON.stringify(stored), b = JSON.stringify(item);
+            if (a === b) { accepted.push({ id: item.id, rev: row.rev }); continue; }
+            // same timestamp + device, different content: deterministic tie-break on serialized data
+            if (b < a) { rejected.push({ id: item.id, reason: 'stale', current }); continue; }
+          } else if (mergeItem(current, item) !== item) { rejected.push({ id: item.id, reason: 'stale', current }); continue; }
         }
         const rev = this.nextRev();
-        this.sql.exec('INSERT OR REPLACE INTO items (id, rev, updated_at, updated_by, deleted, data) VALUES (?, ?, ?, ?, ?, ?)',
-          item.id, rev, item.updatedAt, item.updatedBy, item.deleted ? 1 : 0, JSON.stringify(item));
+        this.sql.exec('INSERT OR REPLACE INTO items (id, rev, updated_at, updated_by, deleted, data, written_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          item.id, rev, item.updatedAt, item.updatedBy, item.deleted ? 1 : 0, JSON.stringify(item), now);
         accepted.push({ id: item.id, rev });
       }
     });
@@ -264,6 +279,7 @@ export class Catalog {
       headers: Object.assign({
         'Content-Type': (obj.httpMetadata && obj.httpMetadata.contentType) || 'image/jpeg',
         'Cache-Control': immutable ? 'public, max-age=31536000, immutable' : 'public, max-age=300',
+        'X-Content-Type-Options': 'nosniff',
         ETag: obj.httpEtag
       }, CORS)
     });
@@ -283,9 +299,9 @@ export class Catalog {
     if (now - (Number(this.kvGet('lastPurge')) || 0) < PURGE_EVERY_MS) return;
     this.kvSet('lastPurge', now);
     const cutoff = now - TOMBSTONE_RETENTION_MS;
-    const top = this.sql.exec('SELECT MAX(rev) AS r FROM items WHERE deleted = 1 AND updated_at < ?', cutoff).one().r;
+    const top = this.sql.exec('SELECT MAX(rev) AS r FROM items WHERE deleted = 1 AND written_at < ?', cutoff).one().r;
     if (top == null) return;
-    this.sql.exec('DELETE FROM items WHERE deleted = 1 AND updated_at < ?', cutoff);
+    this.sql.exec('DELETE FROM items WHERE deleted = 1 AND written_at < ?', cutoff);
     const horizon = Number(this.kvGet('tombstoneHorizonRev')) || 0;
     if (top > horizon) this.kvSet('tombstoneHorizonRev', top);
   }
