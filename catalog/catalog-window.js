@@ -4,6 +4,9 @@
 const path = require('path');
 const { BrowserWindow, screen, globalShortcut, Notification } = require('electron');
 
+const { defaults } = require('./defaults');
+const { hasModifier } = require('./sanitize');
+
 const PRELOAD = path.join(__dirname, '..', 'preload-catalog.js');
 const PAGE = path.join(__dirname, '..', 'renderer', 'catalog', 'index.html');
 
@@ -170,15 +173,24 @@ function createCatalogWindow({ getMainWindow, configStore, onVisibility }) {
 
   // ---- global hotkey ----
   // Returns { ok, error }. On failure the previously working key (if any) stays active.
+  // '' turns the hotkey off. A key without Ctrl/Alt is refused: it would be
+  // grabbed system-wide and stolen from the POS program (e.g. F2 in Sea & Hill).
   function registerHotkey(accelerator) {
-    if (accelerator && accelerator === activeKey && globalShortcut.isRegistered(accelerator)) {
+    if (!accelerator) {
+      if (activeKey) { try { globalShortcut.unregister(activeKey); } catch (_) { /* ignore */ } }
+      activeKey = null;
+      lastError = null;
+      if (cfg().window.hotkey !== '') configStore.update({ window: { hotkey: '' } });
+      return { ok: true, error: null };
+    }
+    if (!hasModifier(accelerator)) { lastError = 'needs_modifier'; return { ok: false, error: 'needs_modifier' }; }
+    if (accelerator === activeKey && globalShortcut.isRegistered(accelerator)) {
       lastError = null;
       return { ok: true, error: null };
     }
     let ok = false;
     let error = null;
     try {
-      if (!accelerator) throw new Error('empty accelerator');
       ok = globalShortcut.register(accelerator, safeToggle);
       if (!ok) error = 'in_use';
     } catch (e) {
@@ -197,7 +209,10 @@ function createCatalogWindow({ getMainWindow, configStore, onVisibility }) {
   }
 
   function initHotkey() {
-    const key = cfg().window.hotkey;
+    let key = cfg().window.hotkey;
+    if (!key) return { ok: true, error: null }; // turned off by the user
+    // Older configs may hold a bare F-key (the old F2 default) — move to the safe default.
+    if (!hasModifier(key)) key = defaults.window.hotkey;
     const r = registerHotkey(key);
     if (!r.ok) {
       console.warn('[catalog] hotkey', key, 'could not be registered:', r.error);
@@ -223,7 +238,7 @@ function createCatalogWindow({ getMainWindow, configStore, onVisibility }) {
     show, hide, toggle, togglePin, setTheme, send, initHotkey, registerHotkey, dispose,
     getPinState: () => pinned,
     isVisible: () => !!(win && !win.isDestroyed() && win.isVisible() && !win.isMinimized()),
-    getHotkey: () => ({ accelerator: activeKey || cfg().window.hotkey, active: !!activeKey, error: lastError }),
+    getHotkey: () => ({ accelerator: activeKey || cfg().window.hotkey || '', active: !!activeKey, disabled: !cfg().window.hotkey, error: lastError }),
     getWindow: () => (win && !win.isDestroyed() ? win : null),
     isOwnSender: (wc) => !!(win && !win.isDestroyed() && wc === win.webContents)
   };

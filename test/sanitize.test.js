@@ -27,4 +27,10 @@ assert.deepStrictEqual(sanitizeItemInput('x'), {});
 const c = sanitizeConfigPatch({ worker: { url: 'https://x', writeToken: 'secret' }, window: { hotkey: 'F9', alwaysOnTop: false }, hasWriteToken: true });
 assert.deepStrictEqual(c, { worker: { url: 'https://x' }, window: { alwaysOnTop: false } });
 
+// global hotkeys need Ctrl/Alt so they never steal a bare key from the POS program
+const { hasModifier } = require('../catalog/sanitize');
+for (const k of ['Ctrl+Alt+B', 'Alt+Q', 'Ctrl+F2', 'CommandOrControl+Shift+K']) assert.ok(hasModifier(k), k);
+for (const k of ['F2', 'Shift+F2', 'B', '', null, 'Shift+Alt']) assert.ok(!hasModifier(k), String(k));
+assert.ok(hasModifier(require('../catalog/defaults').defaults.window.hotkey), 'default hotkey has a modifier');
+
 console.log('sanitize.test.js ok');

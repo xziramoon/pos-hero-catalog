@@ -8,7 +8,8 @@ const defaults = {
     requestTimeoutMs: 20000, imageTimeoutMs: 60000, batchSize: 200, warnAfterMs: 180000
   },
   window: {
-    hotkey: 'F2', width: 920, height: 752, minWidth: 640, minHeight: 520,
+    // Needs a Ctrl/Alt modifier: a bare F-key is global and steals it from the POS (Sea & Hill uses F2). '' = no hotkey.
+    hotkey: 'Ctrl+Alt+B', width: 920, height: 752, minWidth: 640, minHeight: 520,
     dockSide: 'left', dockGap: 8, alwaysOnTop: true, bounds: null
   },
   grid: { slotW: 100, slotH: 126, tile: 88, gap: 8, showNames: true, nameLines: 1, bufferRows: 3 },

@@ -72,4 +72,12 @@ function sanitizeWriteToken(t) {
   return /^[!-~]{16,256}$/.test(v) ? v : null;
 }
 
-module.exports = { sanitizeMetaPatch, sanitizeItemInput, sanitizeConfigPatch, sanitizeWriteToken, DEFAULT_CAT };
+// Global hotkeys must include Ctrl or Alt: a bare key (e.g. F2) is grabbed
+// system-wide and stolen from the POS program.
+function hasModifier(accel) {
+  return /(^|\+)(Ctrl|Control|CommandOrControl|CmdOrCtrl|Alt|Option|AltGr)\+/i.test(String(accel || ''));
+}
+
+module.exports = {
+  hasModifier,
+  sanitizeMetaPatch, sanitizeItemInput, sanitizeConfigPatch, sanitizeWriteToken, DEFAULT_CAT };

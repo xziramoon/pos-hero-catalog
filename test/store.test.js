@@ -84,14 +84,14 @@ try {
 
   // ---- defaults + config
   const d = getDefaults();
-  assert.strictEqual(d.window.hotkey, 'F2');
+  assert.strictEqual(d.window.hotkey, 'Ctrl+Alt+B');
   assert.strictEqual(d.grid.slotW, 100);
   const m = deepMerge(d, { window: { hotkey: 'F3' }, image: { wbGainClamp: [1, 1] }, extra: 1 });
   assert.strictEqual(m.window.hotkey, 'F3');
   assert.strictEqual(m.window.width, 920, 'untouched defaults kept');
   assert.deepStrictEqual(m.image.wbGainClamp, [1, 1], 'arrays replaced');
   assert.strictEqual(m.extra, 1);
-  assert.strictEqual(getDefaults().window.hotkey, 'F2', 'defaults not mutated');
+  assert.strictEqual(getDefaults().window.hotkey, 'Ctrl+Alt+B', 'defaults not mutated');
 
   const cdir = path.join(tmp, 'cfg');
   const c = createConfigStore(cdir);

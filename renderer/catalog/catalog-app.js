@@ -559,7 +559,8 @@
     else return null;
     const mods = [];
     if (e.ctrlKey) mods.push('Ctrl'); if (e.altKey) mods.push('Alt'); if (e.shiftKey) mods.push('Shift');
-    if (!mods.length && !/^F\d/.test(key)) return { error: 'ต้องกด Ctrl หรือ Alt ร่วมด้วย (ยกเว้นปุ่ม F1-F24)' };
+    // Ctrl/Alt is mandatory: a bare key (even F2) is grabbed system-wide and stolen from the POS program.
+    if (!e.ctrlKey && !e.altKey) return { error: 'ต้องกด Ctrl หรือ Alt ร่วมด้วย ปุ่มเดี่ยวๆ อย่าง F2 จะไปแย่งปุ่มของโปรแกรมขาย' };
     return { accel: mods.concat(key).join('+') };
   }
 
@@ -569,9 +570,9 @@
     const mode = S.cfg.copy.onSlotActivate;
     showDialog(
       '<h2 id="dlgTitle">ตั้งค่า</h2>' +
-      '<label class="cat-field">ปุ่มลัดเปิด/ปิดกระเป๋า (คลิกช่องแล้วกดปุ่มที่ต้องการ)<input id="hkInput" class="cat-hotkey-input" readonly value="' + esc(hk.accelerator) + '" aria-label="ปุ่มลัด"></label>' +
-      '<span class="hint" id="hkMsg">' + (hk.active ? '' : 'ปุ่ม ' + esc(hk.accelerator) + ' ใช้ไม่ได้ในตอนนี้ (อาจมีโปรแกรมอื่นใช้อยู่) เลือกปุ่มใหม่ได้เลย') + '</span>' +
-      '<div class="cat-dlg-actions"><button type="button" class="cat-btn" id="hkApply" disabled>ใช้ปุ่มนี้</button></div>' +
+      '<label class="cat-field">ปุ่มลัดเปิด/ปิดกระเป๋า (คลิกช่องแล้วกดปุ่มที่ต้องการ ต้องมี Ctrl หรือ Alt เช่น Ctrl+Alt+B)<input id="hkInput" class="cat-hotkey-input" readonly value="' + esc(hk.disabled ? '' : hk.accelerator) + '" placeholder="ไม่ใช้ปุ่มลัด" aria-label="ปุ่มลัด"></label>' +
+      '<span class="hint" id="hkMsg">' + (hk.disabled ? 'ตอนนี้ไม่ได้ใช้ปุ่มลัด เปิดกระเป๋าจากปุ่มกระเป๋าบนหน้าต่าง POS Hero' : hk.active ? '' : 'ปุ่ม ' + esc(hk.accelerator) + ' ใช้ไม่ได้ในตอนนี้ (อาจมีโปรแกรมอื่นใช้อยู่) เลือกปุ่มใหม่ได้เลย') + '</span>' +
+      '<div class="cat-dlg-actions"><button type="button" class="cat-btn" id="hkOff"' + (hk.disabled ? ' disabled' : '') + '>ไม่ใช้ปุ่มลัด</button><button type="button" class="cat-btn" id="hkApply" disabled>ใช้ปุ่มนี้</button></div>' +
       '<label class="cat-field">เมื่อคลิกที่ช่องสินค้า<select id="actSel">' +
       [['copyCode', 'คัดลอกรหัสทันที'], ['select', 'เลือกอย่างเดียว (ไม่คัดลอก)'], ['copyBarcode', 'คัดลอกบาร์โค้ด']].map((o) => '<option value="' + o[0] + '"' + (o[0] === mode ? ' selected' : '') + '>' + o[1] + '</option>').join('') +
       '</select></label>' +
@@ -590,7 +591,17 @@
           if (!pending) return;
           const r = await api.setHotkey(pending);
           if (r.ok) { setHotkeyLabel(pending); updateHotkeyWarn({ active: true, accelerator: pending }); msg.textContent = 'ตั้งปุ่มลัดเป็น ' + pending + ' แล้ว'; apply.disabled = true; }
-          else msg.textContent = r.error === 'in_use' ? 'ปุ่มนี้ถูกโปรแกรมอื่นใช้อยู่ ลองปุ่มอื่น' : 'ปุ่มนี้ใช้ไม่ได้ ลองปุ่มอื่น';
+          else msg.textContent = r.error === 'in_use' ? 'ปุ่มนี้ถูกโปรแกรมอื่นใช้อยู่ ลองปุ่มอื่น' : r.error === 'needs_modifier' ? 'ต้องมี Ctrl หรือ Alt ร่วมด้วย ลองปุ่มอื่น' : 'ปุ่มนี้ใช้ไม่ได้ ลองปุ่มอื่น';
+          if (r.ok) root.querySelector('#hkOff').disabled = false;
+        });
+        root.querySelector('#hkOff').addEventListener('click', async (e) => {
+          const btn = e.currentTarget;
+          const r = await api.setHotkey('');
+          if (r && r.ok) {
+            pending = null; input.value = ''; apply.disabled = true; btn.disabled = true;
+            setHotkeyLabel(''); updateHotkeyWarn({ active: false, disabled: true });
+            msg.textContent = 'ปิดปุ่มลัดแล้ว เปิดกระเป๋าจากปุ่มกระเป๋าบนหน้าต่าง POS Hero';
+          }
         });
         root.querySelector('#actSel').addEventListener('change', async (e) => {
           S.cfg = (await api.setConfig({ copy: { onSlotActivate: e.target.value } })) || S.cfg;
@@ -739,9 +750,9 @@
     );
   }
 
-  function setHotkeyLabel(a) { $('hotkeyLabel').textContent = a; }
+  function setHotkeyLabel(a) { $('hotkeyLabel').textContent = a || 'ไม่มี'; }
   function updateHotkeyWarn(hk) {
-    $('hotkeyWarn').hidden = !!hk.active;
+    $('hotkeyWarn').hidden = !!(hk.active || hk.disabled);
     if (!hk.active) $('hotkeyWarnText').textContent = 'ปุ่มลัด ' + hk.accelerator + ' ใช้ไม่ได้ (โปรแกรมอื่นใช้อยู่) เปิดกระเป๋าได้จากปุ่มบนหน้าต่างหลัก หรือเลือกปุ่มใหม่';
   }
 

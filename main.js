@@ -319,7 +319,9 @@ app.whenReady().then(() => {
   // แล้วไม่มีใครมาเปิดแอปเอง relay จะไม่รับสัญญาณจากมือถือเลยจนกว่าจะมีคนสังเกตเห็น กับรายการที่
   // พลาดไปช่วงนั้นก็ไม่มีทาง replay ได้ทีหลังด้วย (ไม่มี queue ฝั่งมือถือ) จึงต้องเปิดเองตอน
   // Windows login เสมอ (เหมือน desktop-app/main.js ของโปรเจกต์ relay ตัวเดิม)
-  app.setLoginItemSettings({ openAtLogin: true });
+  // เฉพาะตัวที่ติดตั้งจริง — ถ้ารันจาก source (`npm start`) จะไปลงทะเบียน electron.exe ใน
+  // node_modules ให้เปิดเองทุกครั้งที่ login แทน
+  if (app.isPackaged) app.setLoginItemSettings({ openAtLogin: true });
 
   lastMiniPosition = loadMiniPosition();
   createWindow();
