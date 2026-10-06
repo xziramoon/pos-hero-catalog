@@ -10,7 +10,8 @@ const { pathToFileURL } = require('url');
 const { protocol, ipcMain, clipboard, net, powerMonitor } = require('electron');
 const { createConfigStore } = require('./catalog-config');
 const { createStore } = require('./catalog-store');
-const { createImages } = require('./catalog-images');
+const { createImages, HASH_RE: IMG_HASH_RE } = require('./catalog-images');
+const { saveImageForItem } = require('./catalog-image-save');
 const { createOutbox } = require('./catalog-outbox');
 const { createSync } = require('./catalog-sync');
 const { createCatalogWindow } = require('./catalog-window');
@@ -108,6 +109,18 @@ function registerIpc() {
       .map((i) => Object.assign({}, i, { cat: c }));
     store.putMany(list);
   }, undefined);
+  // Phase 3b: image editor. The only path that may set Item.image (sanitizeItemInput forbids it).
+  h('saveImage', (itemId, payload) => {
+    requireEditable();
+    return saveImageForItem({ store, images }, itemId, payload);
+  }, null);
+  // orig bytes for re-editing; downloads it from R2 first when it is not on this machine.
+  h('readOrig', async (hash) => {
+    hash = String(hash || '');
+    if (!IMG_HASH_RE.test(hash)) return null;
+    if (!images.has(hash, 'orig') && sync) await sync.ensureImage(hash, 'orig', null);
+    return images.read(hash, 'orig', null);
+  }, null);
   h('getMeta', () => store.getMeta(), null);
   h('setMeta', (patch) => { requireEditable(); return store.setMeta(sanitizeMetaPatch(patch)); }, null);
   h('getConfig', () => configStore.publicConfig(), null);

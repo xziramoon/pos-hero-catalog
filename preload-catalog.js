@@ -34,5 +34,13 @@ contextBridge.exposeInMainWorld('catalogAPI', {
   testConnection: (cfg) => inv('testConnection', cfg),
   initWorker: () => inv('initWorker'),
   syncNow: () => inv('syncNow'),
-  setWriteToken: (token) => inv('set-write-token', token)
+  setWriteToken: (token) => inv('set-write-token', token),
+  // Phase 3b (photo editor)
+  saveImage: (itemId, payload) => inv('saveImage', itemId, payload),
+  readOrig: async (hash) => {
+    const b = await inv('readOrig', hash);
+    if (!b) return null;
+    if (b instanceof ArrayBuffer) return b;
+    return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength);
+  }
 });

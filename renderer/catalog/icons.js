@@ -19,7 +19,17 @@
     gear: ['...xxxx...', 'x..xxxx..x', 'xxxxxxxxxx', '.xxx..xxx.', 'xxx....xxx', 'xxx....xxx', '.xxx..xxx.', 'xxxxxxxxxx', 'x..xxxx..x', '...xxxx...'],
     select: ['xxxxxxxxxx', 'x........x', 'x......xxx', 'x.....xx.x', 'xx...xx..x', 'x.xxxx...x', 'x..xx....x', 'x........x', 'xxxxxxxxxx', '..........'],
     scan: ['x.xx.x.xxx', 'x.xx.x.xxx', 'x.xx.x.xxx', 'x.xx.x.xxx', 'x.xx.x.xxx', 'x.xx.x.xxx', 'x.xx.x.xxx', 'x.xx.x.xxx', 'x.xx.x.xxx', 'x.xx.x.xxx'],
-    image: ['xxxxxxxxxx', 'x........x', 'x..xx....x', 'x..xx....x', 'x....x...x', 'x...xxx..x', 'x..xxxxx.x', 'x.xxxxxxxx', 'x........x', 'xxxxxxxxxx']
+    image: ['xxxxxxxxxx', 'x........x', 'x..xx....x', 'x..xx....x', 'x....x...x', 'x...xxx..x', 'x..xxxxx.x', 'x.xxxxxxxx', 'x........x', 'xxxxxxxxxx'],
+    rotl: ['...xxxx...', '..xxxxxxx.', '.xx....xxx', 'xxx.....xx', 'xxxx....xx', '.........x', '.........x', '.x......xx', '..xxxxxxx.', '...xxxx...'],
+    rotr: ['...xxxx...', '.xxxxxxx..', 'xxx....xx.', 'xx.....xxx', 'xx....xxxx', 'x.........', 'x.........', 'xx......x.', '.xxxxxxx..', '...xxxx...'],
+    brush: ['.......xxx', '......xxxx', '.....xxxx.', '....xxxx..', '...xxxx...', '.xxxxx....', 'xxxxx.....', 'xxxx......', 'xx........', '..........'],
+    eraser: ['....xxxxx.', '...xxxxxxx', '..xxxxxxx.', '.xxx..xx..', 'xxx..xxx..', 'xx..xxx...', 'x..xxx....', '.xxx......', 'xxxxxxxxxx', '..........'],
+    eye: ['..........', '...xxxx...', '.xx....xx.', 'xx..xx..xx', 'x..xxxx..x', 'xx..xx..xx', '.xx....xx.', '...xxxx...', '..........', '..........'],
+    fit: ['xxx....xxx', 'x........x', 'x........x', '..........', '..........', '..........', '..........', 'x........x', 'x........x', 'xxx....xxx'],
+    focus: ['....xx....', '....xx....', '..xxxxxx..', '.xx....xx.', 'xxx.xx.xxx', 'xxx.xx.xxx', '.xx....xx.', '..xxxxxx..', '....xx....', '....xx....'],
+    reset: ['...xxxx...', '..xxxxxx..', '.xx....xx.', '.x......xx', '.x.....xxx', '.x......xx', '.xx.......', '..xxxxxxx.', '...xxxxx..', '..........'],
+    undo: ['...x......', '..xx......', '.xxxxxxxx.', 'xxxxxxxxxx', '.xxx....xx', '..xx.....x', '...x.....x', '........xx', '.xxxxxxxx.', '..........'],
+    camera: ['..........', '...xxxx...', 'xxxxxxxxxx', 'x........x', 'x..xxxx..x', 'x.xx..xx.x', 'x.xx..xx.x', 'x..xxxx..x', 'xxxxxxxxxx', '..........']
   };
 
   const cache = {};
