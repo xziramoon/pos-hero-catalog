@@ -303,6 +303,7 @@
       '<button type="button" class="cat-btn" id="cardCopy" aria-label="คัดลอกรหัส"><span data-icon="copy" data-size="12"></span>คัดลอก</button></div>' +
       '<div class="card-actions">' +
       '<button type="button" class="cat-btn" id="cardImg"' + (readOnly() ? ' disabled title="ดูอย่างเดียว"' : '') + ' aria-label="' + (img ? 'ปรับรูปสินค้า' : 'เพิ่มรูปสินค้า') + '"><span data-icon="image" data-size="12"></span>' + (img ? 'ปรับรูป' : 'เพิ่มรูป') + '</button>' +
+      (img ? '<button type="button" class="cat-btn" id="cardImgDel"' + (readOnly() ? ' disabled title="ดูอย่างเดียว"' : '') + ' aria-label="ลบรูปสินค้า"><span data-icon="trash" data-size="12"></span>ลบรูป</button>' : '') +
       '<button type="button" class="cat-btn" id="cardEdit"' + (readOnly() ? ' disabled title="ดูอย่างเดียว"' : '') + '><span data-icon="edit" data-size="12"></span>แก้ไข</button>' +
       '<button type="button" class="cat-btn" id="cardFav"' + (readOnly() ? ' disabled' : '') + ' aria-pressed="' + !!it.fav + '" aria-label="' + (it.fav ? 'เอาออกจากของโปรด' : 'ตั้งเป็นของโปรด') + '"><span data-icon="star" data-size="12"></span></button>' +
       '</div>';
@@ -312,6 +313,7 @@
     $('cardCopy').onclick = () => copyValue(it, 'code');
     $('cardEdit').onclick = () => openEditDialog(it);
     $('cardImg').onclick = () => openEditorForItem(it);
+    if ($('cardImgDel')) $('cardImgDel').onclick = () => confirmRemoveImage(it);
     $('cardFav').onclick = () => api.setFav([it.id], !it.fav);
   }
 
@@ -493,10 +495,11 @@
             if (imgCtl.pending()) {
               try {
                 const p = imgCtl.pending();
-                const withImg = await api.saveImage(saved.id, await PE.toPayload(p.res, { includeOrig: !(saved.image && saved.image.hash === p.res.hash) }));
-                if (!withImg) throw new Error('saveImage failed');
+                const withImg = unwrapSaved(await api.saveImage(saved.id, await PE.toPayload(p.res, { includeOrig: await needOrig(saved, p.res.hash) })));
                 upsert(withImg);
-              } catch (err) { console.warn('[catalog] saveImage failed', err); imgFailed = true; }
+              } catch (err) { console.warn('[catalog] saveImage failed', err); imgFailed = (err && err.userMessage) || true; }
+            } else if (imgCtl.removing()) {
+              try { upsert(unwrapSaved(await api.removeImage(saved.id), 'ลบรูปไม่สำเร็จ ลองอีกครั้ง')); } catch (err) { console.warn('[catalog] removeImage failed', err); imgFailed = (err && err.userMessage) || true; }
             }
             S.meta = (await api.getMeta()) || S.meta;
             closeDialog();
@@ -504,7 +507,7 @@
             S.selectedId = saved.id;
             refresh({ keepScroll: !isNew });
             if (isNew) { const i = S.filtered.findIndex((x) => x.id === saved.id); if (i >= 0) { scrollToIndex(i); renderRows(); } }
-            if (imgFailed) toast('บันทึกสินค้าแล้ว แต่บันทึกรูปไม่สำเร็จ กด "ปรับรูป" เพื่อลองอีกครั้ง', true); else toast('บันทึกแล้ว');
+            if (imgFailed) toast('บันทึกสินค้าแล้ว แต่ยังไม่ได้ทำเรื่องรูป: ' + (typeof imgFailed === 'string' ? imgFailed : 'กด "ปรับรูป" เพื่อลองอีกครั้ง'), true); else toast('บันทึกแล้ว');
           } catch (err) {
             toast('บันทึกไม่สำเร็จ ลองอีกครั้ง', true);
           }
@@ -516,6 +519,19 @@
     );
   }
   const openEditDialog = (it) => itemDialog(it);
+
+  // saveImage / removeImage return the item or { error: <Thai message from main> }; turn that into a throw with a user-facing message.
+  function userError(msg) { const e = new Error(msg); e.userMessage = msg; return e; }
+  function unwrapSaved(r, fallback) {
+    if (!r) throw userError(fallback || 'บันทึกรูปไม่สำเร็จ ลองอีกครั้ง');
+    if (r.error) throw userError(r.error);
+    return r;
+  }
+  // Always send the orig unless main confirms it already has this hash on disk (it may be missing, e.g. a synced item).
+  async function needOrig(it, hash) {
+    if (!(it && it.image && it.image.hash === hash)) return true;
+    try { return !(await api.hasOrig(hash)); } catch (e) { return true; }
+  }
 
   // ------------------------------------------------------------------ images (photo editor wiring)
   function tipsHtml(open) {
@@ -530,7 +546,8 @@
     return '<div class="imgf" id="imgf"><div class="imgf-tile noimg" id="imgfTile"></div><div class="imgf-side">' +
       '<div class="imgf-state" id="imgfState" aria-live="polite"></div><div class="imgf-reasons" id="imgfReasons"></div>' +
       '<div class="imgf-btns"><button type="button" class="cat-btn cat-btn-sm" id="imgfPick"><span data-icon="camera" data-size="12"></span><span id="imgfPickText">เลือกรูป</span></button>' +
-      '<button type="button" class="cat-btn cat-btn-sm" id="imgfEdit" aria-label="ปรับรูป"><span data-icon="image" data-size="12"></span>ปรับรูป</button></div>' +
+      '<button type="button" class="cat-btn cat-btn-sm" id="imgfEdit" aria-label="ปรับรูป"><span data-icon="image" data-size="12"></span>ปรับรูป</button>' +
+      '<button type="button" class="cat-btn cat-btn-sm cat-btn-danger" id="imgfRemove" aria-label="ลบรูป"><span data-icon="trash" data-size="12"></span><span id="imgfRemoveText">ลบรูป</span></button></div>' +
       '<div class="imgf-hint">เลือกไฟล์ ลากรูปมาวางตรงนี้ หรือกด Ctrl+V เพื่อวางรูปจากคลิปบอร์ด ระบบจะตัดพื้นหลังและจัดลงช่องให้เอง</div></div></div>';
   }
   function pickImageFile() {
@@ -551,6 +568,24 @@
     return { blob: new Blob([buf], { type: 'image/jpeg' }), isOrig: true };
   }
 
+  function confirmRemoveImage(it) {
+    if (!guardEdit()) return;
+    showDialog(
+      '<h2 id="dlgTitle">ลบรูปสินค้า</h2><p>ลบรูปของ "' + esc(labelOf(it)) + '" ใช่ไหม สินค้ายังอยู่ แค่ไม่มีรูป (เพิ่มรูปใหม่ได้ทีหลัง)</p>' +
+      '<div class="cat-conn-msg bad" id="rmErr" role="alert" hidden></div>' +
+      '<div class="cat-dlg-actions"><button type="button" class="cat-btn" data-close>ยกเลิก</button>' +
+      '<button type="button" class="cat-btn cat-btn-danger" id="rmGo">ลบรูป</button></div>',
+      (root) => {
+        root.querySelector('#rmGo').addEventListener('click', async () => {
+          try {
+            upsert(unwrapSaved(await api.removeImage(it.id), 'ลบรูปไม่สำเร็จ ลองอีกครั้ง'));
+            closeDialog(); refresh({ keepScroll: true }); toast('ลบรูปแล้ว');
+          } catch (e) { const m = root.querySelector('#rmErr'); m.textContent = e.userMessage || 'ลบรูปไม่สำเร็จ ลองอีกครั้ง'; m.hidden = false; }
+        });
+      }
+    );
+  }
+
   // "ปรับรูป" on the detail card: saves straight to the item.
   async function openEditorForItem(it) {
     if (!guardEdit()) return;
@@ -568,11 +603,19 @@
     await PE.open({
       title: labelOf(it), source, edit, shortName: it.shortName || '', cfg: S.cfg.image,
       onDone: async (res, meta) => {
-        const payload = await PE.toPayload(res, { includeOrig: !(it.image && it.image.hash === res.hash) });
-        let fin = await api.saveImage(it.id, payload);
-        if (!fin) throw new Error('saveImage failed');
-        if (meta.shortName !== (it.shortName || '')) fin = (await api.save({ id: it.id, shortName: meta.shortName })) || fin;
+        const cur = S.items.get(it.id) || it; // refreshed: a retry must not use the stale item for includeOrig / shortName
+        const payload = await PE.toPayload(res, { includeOrig: await needOrig(cur, res.hash) });
+        let fin = unwrapSaved(await api.saveImage(it.id, payload));
         upsert(fin);
+        if (meta.shortName !== (cur.shortName || '')) {
+          try { fin = unwrapSaved(await api.save({ id: it.id, shortName: meta.shortName }), 'บันทึกชื่อสั้นไม่สำเร็จ'); upsert(fin); } catch (e) {
+            // the image is already saved: close the editor instead of leaving the user to re-save the same image
+            console.warn('[catalog] shortName save failed', e);
+            refresh({ keepScroll: true });
+            toast('บันทึกรูปแล้ว แต่ชื่อสั้นยังไม่ได้บันทึก กด "แก้ไข" เพื่อลองใหม่', true);
+            return;
+          }
+        }
         refresh({ keepScroll: true });
         toast('บันทึกรูปแล้ว');
       }
@@ -584,10 +627,11 @@
     const q = (id) => root.querySelector(id);
     let pend = null; // { res, source, thumbUrl }
     let busy = false;
+    let removed = false; // user chose "ลบรูป": applied when the dialog is saved
     function clearPend() { if (pend) { URL.revokeObjectURL(pend.thumbUrl); pend = null; } }
     function render() {
       const tile = q('#imgfTile'); const state = q('#imgfState'); const reasons = q('#imgfReasons');
-      const existing = !!(it && hasImg(it));
+      const existing = !!(it && hasImg(it)) && !removed;
       let quality = null; let text = 'ยังไม่มีรูป'; let codes = [];
       if (pend) {
         tile.classList.remove('noimg'); tile.innerHTML = '<img src="' + esc(pend.thumbUrl) + '" alt="รูปสินค้าใหม่">';
@@ -596,12 +640,15 @@
       } else if (existing) {
         tile.classList.remove('noimg'); tile.innerHTML = '<img src="' + esc(imgUrl(it, 'thumb')) + '" alt="รูปสินค้า">';
         quality = it.image.quality || null; text = 'รูปปัจจุบัน' + (quality ? ' · ' + PE.qualityLabel(quality) : '');
-      } else { tile.classList.add('noimg'); tile.innerHTML = I.svg('box', 32); }
+      } else { tile.classList.add('noimg'); tile.innerHTML = I.svg('box', 32); if (removed) text = 'จะลบรูปเมื่อกด "บันทึก"'; }
       if (busy) text = 'กำลังตัดแต่งรูป...';
       state.textContent = text; state.dataset.q = busy ? '' : (quality || '');
       reasons.innerHTML = codes.map((c) => '<div>' + esc(PE.reasonText(c)) + '</div>').join('');
       q('#imgfPickText').textContent = pend || existing ? 'เปลี่ยนรูป' : 'เลือกรูป';
       q('#imgfPick').disabled = busy; q('#imgfEdit').disabled = busy || !(pend || existing);
+      const canRemove = !!(pend || existing || (removed && it && hasImg(it)));
+      q('#imgfRemove').hidden = !canRemove; q('#imgfRemove').disabled = busy;
+      q('#imgfRemoveText').textContent = removed && !pend ? 'ไม่ลบแล้ว' : pend ? 'ไม่ใช้รูปนี้' : 'ลบรูป';
     }
     async function loadFile(file) {
       if (busy) return;
@@ -609,7 +656,7 @@
       busy = true; render();
       try {
         const res = await PE.processFile(file, S.cfg.image);
-        clearPend();
+        clearPend(); removed = false;
         pend = { res, source: { blob: res.orig, isOrig: true }, thumbUrl: URL.createObjectURL(res.thumb) };
         if (res.quality !== 'ok') toast(res.quality === 'retake' ? 'รูปเล็กเกินไป ถ่ายใหม่ใกล้ขึ้น หรือกด "ปรับรูป" เพื่อตรวจ' : 'ตัดแต่งแล้ว แต่ควรตรวจรูป กด "ปรับรูป" เพื่อแก้', true);
         else toast('ตัดแต่งรูปอัตโนมัติแล้ว กด "ปรับรูป" ถ้าอยากแก้ต่อ');
@@ -630,7 +677,7 @@
       await PE.open({
         title: form.elements.name.value.trim() || (it && labelOf(it)) || '', source, edit, shortName: form.elements.shortName.value.trim(), cfg: S.cfg.image,
         onDone: async (res, meta) => {
-          clearPend();
+          clearPend(); removed = false;
           pend = { res, source: { blob: res.orig, isOrig: true }, thumbUrl: URL.createObjectURL(res.thumb) };
           form.elements.shortName.value = meta.shortName;
           render();
@@ -639,6 +686,12 @@
     }
     q('#imgfPick').addEventListener('click', async () => { const f = await pickImageFile(); if (f) loadFile(f); });
     q('#imgfEdit').addEventListener('click', editImage);
+    q('#imgfRemove').addEventListener('click', () => {
+      if (busy) return;
+      if (pend) clearPend(); // drop the new picture (the existing one, if any, stays)
+      else removed = !removed;
+      render();
+    });
     const box = q('#imgf');
     box.addEventListener('dragover', (e) => { e.preventDefault(); box.classList.add('drag'); });
     box.addEventListener('dragleave', () => box.classList.remove('drag'));
@@ -656,7 +709,7 @@
     document.addEventListener('paste', onPaste);
     S.dialog.cleanup = () => { document.removeEventListener('paste', onPaste); clearPend(); };
     render();
-    return { pending: () => pend };
+    return { pending: () => pend, removing: () => removed && !pend };
   }
 
   function confirmDelete(ids) {
@@ -986,8 +1039,7 @@
   async function processAndSave(itemId, blob, opts, existingHash) {
     const res = await PE.processFile(blob, S.cfg.image, opts);
     const payload = await PE.toPayload(res, { includeOrig: res.hash !== existingHash });
-    const saved = await api.saveImage(itemId, payload);
-    if (!saved) throw new Error('saveImage failed');
+    const saved = unwrapSaved(await api.saveImage(itemId, payload));
     upsert(saved);
     return res.quality;
   }
@@ -1191,6 +1243,7 @@
       '<div class="cat-dlg-actions"><button type="button" class="cat-btn" id="bkNow">สำรองตอนนี้</button>' +
       '<button type="button" class="cat-btn" id="bkLocal">ส่งออก JSON (จากเครื่องนี้)...</button>' +
       '<button type="button" class="cat-btn" id="bkCloud">ส่งออก JSON (จาก Cloudflare)...</button>' +
+      '<button type="button" class="cat-btn" id="bkRestore"' + (readOnly() ? ' disabled title="ดูอย่างเดียว"' : '') + '>กู้คืนจากไฟล์สำรอง...</button>' +
       '<button type="button" class="cat-btn cat-btn-primary" data-close>ปิด</button></div>',
       (root) => {
         const q = (id) => root.querySelector(id);
@@ -1207,6 +1260,15 @@
           else if (r && r.canceled) msg('');
           else msg('ส่งออกไม่สำเร็จ ' + ((r && r.error) || ''), 'bad');
         };
+        q('#bkRestore').addEventListener('click', async () => {
+          msg('เลือกไฟล์สำรอง (db-....json จากโฟลเดอร์ backups)...');
+          const r = await api.restoreBackup();
+          if (r && r.ok) {
+            msg('กู้คืนแล้ว ' + r.restored + ' รายการ (เพิ่มกลับ ' + (r.added + r.undeleted) + ' · แก้กลับ ' + r.updated + ')' + (r.backup ? ' · สำรองของเดิมไว้ที่ backups/' + r.backup : ''), 'good');
+            loadAll().then(() => refresh({ keepScroll: true }));
+          } else if (r && r.canceled) msg('');
+          else msg('กู้คืนไม่สำเร็จ ' + ((r && r.error) || ''), 'bad');
+        });
         q('#bkLocal').addEventListener('click', exp('local'));
         q('#bkCloud').addEventListener('click', exp('cloud'));
       }
@@ -1236,6 +1298,7 @@
 
   document.addEventListener('keydown', (e) => {
     if (PE.isOpen()) return; // the photo editor handles its own keys
+    if (menuOpen()) { if (menuKey(e)) return; }
     if (S.dialog) {
       if (e.key === 'Escape') { e.preventDefault(); closeDialog(); }
       else if (e.key === 'Tab') trapTab(e);
@@ -1276,10 +1339,33 @@
     api.setFav(ids, !allFav);
   });
   $('btnDelMulti').addEventListener('click', () => { const ids = Array.from(S.picked); if (ids.length) confirmDelete(ids); });
-  $('btnSettings').addEventListener('click', settingsDialog);
-  $('btnCloud').addEventListener('click', cloudDialog);
-  $('btnImport').addEventListener('click', importDialog);
-  $('btnReprocess').addEventListener('click', reprocessDialog);
+  // "เมนู" dropdown for the rarely used skill-bar actions (keeps the bar on one line down to 640px).
+  const menuPop = $('menuPop'), btnMenu = $('btnMenu');
+  const menuItems = () => Array.from(menuPop.querySelectorAll('[role="menuitem"]'));
+  function menuOpen() { return !menuPop.hidden; }
+  function setMenu(open, focusFirst) {
+    menuPop.hidden = !open; btnMenu.setAttribute('aria-expanded', String(open));
+    if (open && focusFirst !== false) { const f = menuItems()[0]; if (f) f.focus(); }
+  }
+  // returns true when the key was consumed
+  function menuKey(e) {
+    const items = menuItems(), i = items.indexOf(document.activeElement);
+    if (e.key === 'Escape') { e.preventDefault(); setMenu(false); btnMenu.focus(); return true; }
+    if (e.key === 'ArrowDown') { e.preventDefault(); items[(i + 1) % items.length].focus(); return true; }
+    if (e.key === 'ArrowUp') { e.preventDefault(); items[(i <= 0 ? items.length : i) - 1].focus(); return true; }
+    if (e.key === 'Home') { e.preventDefault(); items[0].focus(); return true; }
+    if (e.key === 'End') { e.preventDefault(); items[items.length - 1].focus(); return true; }
+    if (e.key === 'Tab') { setMenu(false, false); return false; }
+    return false;
+  }
+  btnMenu.addEventListener('click', () => setMenu(!menuOpen()));
+  btnMenu.addEventListener('keydown', (e) => { if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); setMenu(true); } });
+  document.addEventListener('mousedown', (e) => { if (menuOpen() && !e.target.closest('.cat-menu-wrap')) setMenu(false, false); });
+  const menuRun = (fn) => () => { setMenu(false, false); btnMenu.focus(); fn(); };
+  $('btnSettings').addEventListener('click', menuRun(settingsDialog));
+  $('btnCloud').addEventListener('click', menuRun(cloudDialog));
+  $('btnImport').addEventListener('click', menuRun(importDialog));
+  $('btnReprocess').addEventListener('click', menuRun(reprocessDialog));
   $('btnBackup').addEventListener('click', backupDialog);
   $('syncProblemsBtn').addEventListener('click', problemsDialog);
   $('syncLed').addEventListener('click', () => { if (S.sync && S.sync.state === 'confirm-target') confirmTargetDialog(); else cloudDialog(); });

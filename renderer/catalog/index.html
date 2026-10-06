@@ -80,10 +80,15 @@
         <button class="cat-btn" id="btnFavMulti" type="button"><span data-icon="star" data-size="12"></span>ปักดาว</button>
         <button class="cat-btn cat-btn-danger" id="btnDelMulti" type="button"><span data-icon="trash" data-size="12"></span>ลบ</button>
       </span>
-      <button class="cat-btn" id="btnSettings" type="button"><span data-icon="gear" data-size="12"></span>ตั้งค่า</button>
-      <button class="cat-btn" id="btnCloud" type="button"><span data-icon="gear" data-size="12"></span>ตั้งค่า Cloudflare</button>
-      <button class="cat-btn" id="btnImport" type="button"><span data-icon="folder" data-size="12"></span>นำเข้าจาก Catalog Hero</button>
-      <button class="cat-btn" id="btnReprocess" type="button"><span data-icon="image" data-size="12"></span>จัดรูปทั้งหมด</button>
+      <span class="cat-menu-wrap">
+        <button class="cat-btn" id="btnMenu" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="menuPop"><span data-icon="gear" data-size="12"></span>เมนู</button>
+        <div class="cat-menu" id="menuPop" role="menu" aria-label="เมนูเพิ่มเติม" hidden>
+          <button class="cat-menu-item" id="btnSettings" type="button" role="menuitem"><span data-icon="gear" data-size="12"></span>ตั้งค่า</button>
+          <button class="cat-menu-item" id="btnCloud" type="button" role="menuitem"><span data-icon="gear" data-size="12"></span>ตั้งค่า Cloudflare</button>
+          <button class="cat-menu-item" id="btnImport" type="button" role="menuitem"><span data-icon="folder" data-size="12"></span>นำเข้าจาก Catalog Hero</button>
+          <button class="cat-menu-item" id="btnReprocess" type="button" role="menuitem"><span data-icon="image" data-size="12"></span>จัดรูปทั้งหมด</button>
+        </div>
+      </span>
       <button class="cat-btn" id="btnBackup" type="button"><span data-icon="copy" data-size="12"></span>สำรองข้อมูล</button>
       <span class="cat-skill-spacer"></span>
       <span class="cat-hotkey-hint">ปิด/เปิด <kbd id="hotkeyLabel">Ctrl+Alt+B</kbd></span>

@@ -65,8 +65,18 @@ function sanitizeEdit(e) {
 }
 
 // Next free thumb/full version for a hash: never overwrite a versioned file another item may still show.
-function nextVer(imagesDir, hash) {
+function nextVer(imagesDir, hash, store) {
   let max = 0;
+  // Versions seen for this hash on ANY item (incl. tombstones and items synced from other devices whose
+  // files are not on this disk): keeps two items that share an orig from minting the same ver on different machines.
+  // Residual risk: two devices editing different items with the same hash while offline can still pick the same ver.
+  if (store && store.list) {
+    try {
+      for (const it of store.list({ includeDeleted: true })) {
+        if (it && it.image && it.image.hash === hash && Number.isInteger(it.image.ver)) max = Math.max(max, it.image.ver);
+      }
+    } catch (_) { /* ignore */ }
+  }
   try {
     for (const f of fs.readdirSync(path.join(imagesDir, hash))) {
       const m = /^(?:thumb|full)-v(\d+)\.jpg$/.exec(f);
@@ -102,9 +112,30 @@ function saveImageForItem({ store, images }, itemId, payload) {
   }
   const edit = sanitizeEdit(payload.edit);
   const sameHash = cur.image && cur.image.hash === hash && Number.isInteger(cur.image.ver);
-  const ver = Math.max(nextVer(images.dir, hash), sameHash ? cur.image.ver + 1 : 1);
+  const ver = Math.max(nextVer(images.dir, hash, store), sameHash ? cur.image.ver + 1 : 1);
   images.saveVariants(hash, ver, { orig, thumb, full });
   return store.put(Object.assign({}, cur, { image: { hash, ver, edit, quality, w, h } }));
 }
 
-module.exports = { saveImageForItem, sanitizeEdit, nextVer, MAX_BYTES };
+/** removeImageForItem({store}, itemId) -> updated item with image = null (files stay on disk / R2). */
+function removeImageForItem({ store }, itemId) {
+  const cur = store.get(String(itemId));
+  if (!cur || cur.deleted) throw new Error('unknown item id');
+  if (!cur.image) return cur;
+  return store.put(Object.assign({}, cur, { image: null }));
+}
+
+// Thai message (what the user should do) for an Error thrown above or by requireEditable.
+function thaiSaveError(err) {
+  const m = String((err && err.message) || err || '');
+  if (/read-only/.test(m)) return 'เครื่องนี้ดูอย่างเดียว (ยังไม่ได้ใส่ write token) แก้รูปไม่ได้ ไปที่ "ตั้งค่า Cloudflare" เพื่อใส่ write token';
+  if (/unknown item/.test(m)) return 'ไม่พบสินค้านี้แล้ว (อาจถูกลบไปแล้ว) ปิดหน้านี้แล้วลองใหม่';
+  if (/orig is missing/.test(m)) return 'ไม่พบรูปต้นฉบับในเครื่อง กรุณาเลือกไฟล์รูปอีกครั้ง';
+  if (/hash does not match/.test(m)) return 'ไฟล์รูปไม่ตรงกัน กรุณาเลือกรูปอีกครั้ง';
+  if (/5 MB/.test(m)) return 'ไฟล์รูปใหญ่เกิน 5 MB ลองเลือกรูปที่เล็กลง';
+  if (/not a JPEG|is empty/.test(m)) return 'ข้อมูลรูปไม่ถูกต้อง ลองเลือกรูปใหม่อีกครั้ง';
+  if (/edit is too large/.test(m)) return 'รอยแปรงแก้ขอบมากเกินไป กด "รีเซ็ต" ที่แปรงแล้วลองใหม่';
+  return 'บันทึกรูปไม่สำเร็จ ลองอีกครั้ง ถ้ายังไม่ได้ให้ปิดเปิดโปรแกรมใหม่ (' + m.slice(0, 80) + ')';
+}
+
+module.exports = { saveImageForItem, removeImageForItem, thaiSaveError, MAX_STROKES, MAX_PTS, sanitizeEdit, nextVer, MAX_BYTES };

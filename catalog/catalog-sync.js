@@ -698,7 +698,12 @@ function createSync(opts) {
       await acquireSlot();
       try {
         const r = await request('GET', imgPath({ hash, variant, ver }), { binary: true, timeoutMs: wcfg().imageTimeoutMs });
-        if (r.ok && r.buf.length && /^image\//i.test(r.type)) return images.write(hash, variant, ver, r.buf);
+        if (r.ok && r.buf.length && /^image\//i.test(r.type)) {
+          // The orig's name IS its sha256: never store or use bytes that do not match (corrupt / tampered download).
+          if (variant === 'orig' && require('crypto').createHash('sha256').update(r.buf).digest('hex') !== hash) {
+            console.warn('[catalog] downloaded orig failed sha256 check, discarded', hash);
+          } else return images.write(hash, variant, ver, r.buf);
+        }
       } catch (e) { /* offline, missing or too large: fall through */ } finally { releaseSlot(); }
       imgFailUntil.set(key, clock() + 15000);
       return null;

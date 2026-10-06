@@ -5,6 +5,7 @@
 // Pure Node: the store only needs flush().
 const fs = require('fs');
 const path = require('path');
+const { normalizeItem, validateItem } = require('./shared/merge');
 
 const DAILY_RE = /^db-(\d{8})\.json$/;
 const MANUAL_RE = /^db-\d{8}-\d{6}-[a-z0-9-]+\.json$/;
@@ -111,7 +112,49 @@ function createBackup(o) {
     try { copyDb(file); return { ok: true, file }; } catch (e) { return { ok: false, error: e.message }; }
   }
 
-  return { backupNow, ensureDaily, rotate, startDaily, stop, exportTo, list, dir: bdir };
+  const CONTENT = ['name', 'shortName', 'code', 'cat', 'fav', 'barcodes', 'tags', 'image'];
+
+  /**
+   * restoreFrom(file) -> { ok, restored, added, updated, undeleted, skipped, backup?, error? }
+   * Safe restore of a db-*.json / export file. Copying the file over db.json would NOT work with sync on (old lastRev,
+   * stale outbox, newer server copies win), so the backup's items are re-applied as NEW local edits (fresh updatedAt)
+   * which then sync normally. Items missing from the backup are left alone; deleted backup items are ignored.
+   * Always takes a 'before-restore' backup first and aborts if that fails.
+   */
+  function restoreFrom(file) {
+    try {
+      let data;
+      try { data = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) { return { ok: false, error: 'อ่านไฟล์ไม่ได้ หรือไม่ใช่ไฟล์สำรองของกระเป๋าสินค้า' }; }
+      const raw = data && (Array.isArray(data.items) ? data.items : data.items && typeof data.items === 'object' ? Object.values(data.items) : null);
+      if (!raw) return { ok: false, error: 'ไฟล์นี้ไม่ใช่ไฟล์สำรองของกระเป๋าสินค้า (ไม่พบรายการสินค้า)' };
+      const b = fs.existsSync(dbFile) ? backupNow('before-restore') : { ok: true };
+      if (!b.ok) return { ok: false, error: 'สำรองข้อมูลปัจจุบันก่อนกู้คืนไม่สำเร็จ: ' + b.error };
+      const out = []; let added = 0, updated = 0, undeleted = 0, skipped = 0;
+      const same = (a, c) => JSON.stringify(a) === JSON.stringify(c);
+      for (const r of raw) {
+        const it = normalizeItem(r);
+        if (validateItem(it) || it.deleted) { skipped++; continue; }
+        const cur = store.get(it.id);
+        const next = {};
+        for (const k of CONTENT) next[k] = it[k];
+        if (cur && !cur.deleted && CONTENT.every((k) => same(cur[k], next[k]))) continue; // already identical
+        if (!cur) added++; else if (cur.deleted) undeleted++; else updated++;
+        out.push(Object.assign({}, cur || {}, next, { id: it.id, deleted: false }));
+      }
+      if (out.length) store.putMany(out);
+      const cats = data.meta && Array.isArray(data.meta.categories) ? data.meta.categories.filter((c) => typeof c === 'string' && c.trim()) : [];
+      const have = new Set(store.getMeta().categories || []);
+      const missing = cats.filter((c) => !have.has(c));
+      if (missing.length) store.setMeta({ categories: (store.getMeta().categories || []).concat(missing) });
+      store.flush();
+      return { ok: true, restored: out.length, added, updated, undeleted, skipped, backup: b.name || null };
+    } catch (e) {
+      console.warn('[catalog] restore failed:', e.message);
+      return { ok: false, error: e.message };
+    }
+  }
+
+  return { backupNow, ensureDaily, rotate, startDaily, stop, exportTo, restoreFrom, list, dir: bdir };
 }
 
 module.exports = { createBackup, DAILY_RE, MANUAL_RE, dateStamp };

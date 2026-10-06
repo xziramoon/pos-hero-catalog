@@ -10,7 +10,7 @@ const { createStore } = require('../catalog/catalog-store');
 const { createOutbox } = require('../catalog/catalog-outbox');
 const { createImages } = require('../catalog/catalog-images');
 const { createSync } = require('../catalog/catalog-sync');
-const { saveImageForItem, sanitizeEdit } = require('../catalog/catalog-image-save');
+const { saveImageForItem, removeImageForItem, thaiSaveError, sanitizeEdit } = require('../catalog/catalog-image-save');
 const { defaults } = require('../catalog/defaults');
 const pipelineDefaults = require('../renderer/catalog/image/pipeline/defaults-image');
 
@@ -63,6 +63,23 @@ assert.strictEqual(again.image.ver, 2);
 store.put({ id: 'ITEM2', code: '002', name: 'b', shortName: '', cat: 'ทั่วไป', fav: false, barcodes: [], image: null });
 const other = saveImageForItem({ store, images }, 'ITEM2', Object.assign({}, base, { orig: undefined }));
 assert.strictEqual(other.image.ver, 3);
+
+// ver also counts versions of this hash seen on ANY item (e.g. synced from another device; files not on this disk)
+store.put({ id: 'ITEM3', code: '003', name: 'c', shortName: '', cat: 'x', fav: false, barcodes: [], image: { hash, ver: 9, edit: {}, quality: 'ok', w: 1, h: 1 } });
+assert.strictEqual(saveImageForItem({ store, images }, 'ITEM1', Object.assign({}, base, { orig: undefined })).image.ver, 10);
+
+// removeImage: only clears item.image; unknown/deleted items throw; files stay
+const rem = removeImageForItem({ store }, 'ITEM1');
+assert.strictEqual(rem.image, null);
+assert.strictEqual(store.get('ITEM1').image, null);
+assert.ok(fs.existsSync(path.join(tmp, 'images', hash, 'orig.jpg')), 'files stay on disk');
+assert.strictEqual(removeImageForItem({ store }, 'ITEM1').image, null, 'idempotent');
+assert.throws(() => removeImageForItem({ store }, 'NOPE'), /unknown item/);
+
+// Thai user messages
+assert.ok(/write token/.test(thaiSaveError(new Error('read-only: no write token'))));
+assert.ok(/5 MB/.test(thaiSaveError(new Error('full is larger than 5 MB'))));
+assert.ok(/[฀-๿]/.test(thaiSaveError(new Error('something odd'))));
 
 // edit sanitizer
 const e = sanitizeEdit({ brightness: 999, sharpen: -4, rotate: 'x', maskEdits: [{ mode: 'add', r: 9999, pts: [[1, 2], ['a', 3], [4, 5]] }, { mode: 'bad', pts: [[1, 1]] }], thumbCrop: { z: -1 } });

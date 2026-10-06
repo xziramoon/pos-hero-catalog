@@ -11,7 +11,7 @@ const { protocol, ipcMain, clipboard, net, powerMonitor, dialog } = require('ele
 const { createConfigStore } = require('./catalog-config');
 const { createStore } = require('./catalog-store');
 const { createImages, HASH_RE: IMG_HASH_RE } = require('./catalog-images');
-const { saveImageForItem } = require('./catalog-image-save');
+const { saveImageForItem, removeImageForItem, thaiSaveError } = require('./catalog-image-save');
 const { createOutbox } = require('./catalog-outbox');
 const { createSync } = require('./catalog-sync');
 const migrate = require('./catalog-migrate');
@@ -117,10 +117,27 @@ function registerIpc() {
     store.putMany(list);
   }, undefined);
   // Phase 3b: image editor. The only path that may set Item.image (sanitizeItemInput forbids it).
+  // Returns the item, or { error: <Thai message> } so the UI can tell the user what to do.
   h('saveImage', (itemId, payload) => {
-    requireEditable();
-    return saveImageForItem({ store, images }, itemId, payload);
-  }, null);
+    try {
+      requireEditable();
+      return saveImageForItem({ store, images }, itemId, payload);
+    } catch (e) {
+      console.warn('[catalog] saveImage failed:', e.message);
+      return { error: thaiSaveError(e) };
+    }
+  }, { error: 'บันทึกรูปไม่สำเร็จ ลองอีกครั้ง' });
+  // Detaches the image from the item (files stay on disk / R2). The only other path that touches Item.image.
+  h('removeImage', (itemId) => {
+    try {
+      requireEditable();
+      return removeImageForItem({ store }, itemId);
+    } catch (e) {
+      console.warn('[catalog] removeImage failed:', e.message);
+      return { error: thaiSaveError(e).replace('บันทึกรูปไม่สำเร็จ', 'ลบรูปไม่สำเร็จ') };
+    }
+  }, { error: 'ลบรูปไม่สำเร็จ ลองอีกครั้ง' });
+  h('hasOrig', (hash) => { hash = String(hash || ''); return IMG_HASH_RE.test(hash) && images.has(hash, 'orig'); }, false);
   // orig bytes for re-editing; downloads it from R2 first when it is not on this machine.
   h('readOrig', async (hash) => {
     hash = String(hash || '');
@@ -211,6 +228,16 @@ function registerIpc() {
     }
     return Object.assign(backup.exportTo(r.filePath), { source: 'local' });
   }, { ok: false, error: 'ส่งออกไม่สำเร็จ' });
+  // Restore from a backup file chosen by the user: re-applied as new edits (see catalog-backup restoreFrom).
+  h('restoreBackup', async () => {
+    requireEditable();
+    const r = await dialog.showOpenDialog(cwin.getWindow(), {
+      title: 'เลือกไฟล์สำรอง (db-....json)', defaultPath: path.join(dataDir, 'backups'), properties: ['openFile'],
+      filters: [{ name: 'ไฟล์สำรอง (json)', extensions: ['json'] }, { name: 'ทุกไฟล์', extensions: ['*'] }]
+    });
+    if (r.canceled || !r.filePaths || !r.filePaths[0]) return { ok: false, canceled: true };
+    return backup.restoreFrom(r.filePaths[0]);
+  }, { ok: false, error: 'กู้คืนไม่สำเร็จ' });
   h('copyText', (text) => { clipboard.writeText(String(text == null ? '' : text)); }, undefined);
   h('togglePin', () => cwin.togglePin(), false);
   h('getPinState', () => cwin.getPinState(), false);
