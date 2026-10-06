@@ -92,6 +92,27 @@ image/pipeline/*.js       (Phase 3; pure functions of (cv, ctx, cfg, edit))
 image/image-worker.js     (Phase 3; Web Worker, importScripts('../vendor/opencv.js'))
 vendor/opencv.js          (Phase 3)
 ```
+
+### Phase 3a — image pipeline core (landed; UI = Phase 3b)
+Files: `image/pipeline/{defaults-image,util,steps,index}.js` (UMD: `require()` in Node,
+`importScripts` in the worker, namespace `self.CatalogPipeline.index`),
+`image/image-worker.js`, `image/tools/{load-cv,run-on-file}.js`, `vendor/opencv.js` (+README, Apache-2.0).
+Full API, crop definition and coordinate spaces are documented in the header comments of
+`image/pipeline/index.js` and `image/image-worker.js` (the source of truth). Summary for Phase 3b:
+- Worker: `postMessage({id, type:'process'|'preview'|'cancel', sourceId, file|bitmap|arrayBuffer, cfg, edit})`.
+  `process` -> `{id, ok, thumb:Blob, full:Blob, orig:Blob, hash, quality, reasons, w, h, edit, info}`;
+  `preview` -> raw RGBA buffers `{thumb:{width,height,buffer}, full:{...}, ...}` at analyze size.
+  Send `sourceId` once with the image; later previews may omit the image. Pass `isOrig:true`
+  when re-processing a stored orig so `hash` stays identical.
+- `edit.maskEdits` coords: analyze-size pixels of the image after manual rotate, before auto-straighten
+  (size = `info.analyzeW x info.analyzeH`). `thumbCrop/fullCrop {x,y,z}`: z = zoom vs the default 86% fit,
+  x/y = pan of the content centre in tile px at 512 reference scale (+x right, +y down).
+- `quality` reasons: `too_small`(retake), `mask_area_low|mask_area_high|touches_edges|mask_broken|dark|tilt_too_large`(check).
+- TODO(Phase 3b): `image/pipeline/defaults-image.js` duplicates spec §11 `image` defaults (the worker
+  cannot require main-process `catalog/defaults.js`). Dedupe: have the renderer pass `config.image` as
+  `cfg` on every worker message (already supported) and delete the copy.
+- Also required in renderer HTML: nothing beyond the CSP above; the worker is a classic worker
+  (`new Worker('image/image-worker.js')`), `worker-src 'self' blob:` is enough.
 `renderer/catalog/index.html` links `../theme-hero.css` (and `../base.css` only if needed) and `../assets/fonts/*`.
 
 ## Worker endpoints — spec §5.3, implemented in `cloudflare-inbox/src/catalog.js`

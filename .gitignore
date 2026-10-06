@@ -2,3 +2,7 @@ node_modules/
 dist/
 *.log
 .catalog-dev/
+
+# generated synthetic test photos / dev outputs
+test/fixtures/synthetic/
+test/fixtures/out/
