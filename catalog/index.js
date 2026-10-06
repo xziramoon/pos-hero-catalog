@@ -7,13 +7,15 @@
 const fs = require('fs');
 const path = require('path');
 const { pathToFileURL } = require('url');
-const { protocol, ipcMain, clipboard, net, powerMonitor } = require('electron');
+const { protocol, ipcMain, clipboard, net, powerMonitor, dialog } = require('electron');
 const { createConfigStore } = require('./catalog-config');
 const { createStore } = require('./catalog-store');
 const { createImages, HASH_RE: IMG_HASH_RE } = require('./catalog-images');
 const { saveImageForItem } = require('./catalog-image-save');
 const { createOutbox } = require('./catalog-outbox');
 const { createSync } = require('./catalog-sync');
+const migrate = require('./catalog-migrate');
+const { createBackup } = require('./catalog-backup');
 const { createCatalogWindow } = require('./catalog-window');
 const { sanitizeItemInput, sanitizeMetaPatch, sanitizeConfigPatch, sanitizeWriteToken } = require('./sanitize');
 
@@ -25,6 +27,11 @@ let imagesDir = null;
 let images = null;
 let outbox = null;
 let sync = null;
+let backup = null;
+let dataDir = null;
+let appRef = null;
+const legacyAllowed = new Set(); // legacy files the renderer may import (auto-detected or picked in the open dialog)
+let importState = { running: false };
 
 function registerSchemes() {
   try {
@@ -144,6 +151,66 @@ function registerIpc() {
     sync.configChanged();
     return { ok: true, hasWriteToken: !!t };
   }, { ok: false });
+  // ---- Phase 5: import from the legacy Catalog Hero, backups
+  h('findLegacy', () => {
+    const list = migrate.findCandidates({ appData: appRef ? appRef.getPath('appData') : undefined });
+    legacyAllowed.clear();
+    list.forEach((c) => legacyAllowed.add(c.path));
+    return list;
+  }, []);
+  h('pickLegacyFile', async () => {
+    const r = await dialog.showOpenDialog(cwin.getWindow(), {
+      title: 'เลือกไฟล์ catalog-data.json จาก Catalog Hero เดิม',
+      properties: ['openFile'],
+      filters: [{ name: 'Catalog Hero (json)', extensions: ['json'] }, { name: 'ทุกไฟล์', extensions: ['*'] }]
+    });
+    if (r.canceled || !r.filePaths || !r.filePaths[0]) return null;
+    legacyAllowed.add(r.filePaths[0]);
+    return r.filePaths[0];
+  }, null);
+  h('previewLegacy', (file) => {
+    file = String(file || '');
+    if (!legacyAllowed.has(file)) return { ok: false, error: 'ไฟล์นี้ยังไม่ได้เลือก' };
+    return migrate.previewLegacy(file);
+  }, { ok: false, error: 'อ่านไฟล์ไม่สำเร็จ' });
+  // Text data goes into the store now; image jobs [{itemId, legacyId, name, file}] are returned for the renderer
+  // to process through the OpenCV worker (readImportImage -> processFile -> saveImage).
+  h('importLegacy', async (file) => {
+    requireEditable();
+    file = String(file || '');
+    if (!legacyAllowed.has(file)) return { ok: false, error: 'ไฟล์นี้ยังไม่ได้เลือก' };
+    if (importState.running) return { ok: false, error: 'กำลังนำเข้าอยู่แล้ว' };
+    importState.running = true;
+    try {
+      const b = backup.backupNow('before-import');
+      if (!b.ok && fs.existsSync(path.join(dataDir, 'db.json'))) return { ok: false, error: 'สำรองข้อมูลก่อนนำเข้าไม่สำเร็จ: ' + b.error };
+      const r = await migrate.importLegacy({ store, dir: dataDir, file, onProgress: (p) => cwin.send('catalog:import-progress', p) });
+      if (r.ok) cwin.send('catalog:import-progress', { phase: 'text-done', done: r.summary.total, total: r.summary.total });
+      return r;
+    } finally { importState.running = false; }
+  }, { ok: false, error: 'นำเข้าไม่สำเร็จ' });
+  h('readImportImage', (name) => migrate.readStaged(dataDir, name), null);
+  h('finishImport', () => { migrate.cleanupTmp(dataDir); return true; }, false);
+  h('backupNow', (reason) => {
+    const r = backup.backupNow(typeof reason === 'string' ? reason : '');
+    return { ok: r.ok, name: r.name, error: r.error };
+  }, { ok: false, error: 'สำรองข้อมูลไม่สำเร็จ' });
+  // Export: a JSON file chosen by the user. source 'cloud' = Worker GET /export, otherwise a copy of the local db.json.
+  h('exportJson', async (source) => {
+    const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const r = await dialog.showSaveDialog(cwin.getWindow(), {
+      title: 'ส่งออกข้อมูลสินค้า (JSON)', defaultPath: 'catalog-export-' + stamp + '.json',
+      filters: [{ name: 'JSON', extensions: ['json'] }]
+    });
+    if (r.canceled || !r.filePath) return { ok: false, canceled: true };
+    if (source === 'cloud') {
+      const x = await sync.exportAll();
+      if (!x.ok) return { ok: false, error: x.message };
+      fs.writeFileSync(r.filePath, JSON.stringify(x.data));
+      return { ok: true, file: r.filePath, source: 'cloud' };
+    }
+    return Object.assign(backup.exportTo(r.filePath), { source: 'local' });
+  }, { ok: false, error: 'ส่งออกไม่สำเร็จ' });
   h('copyText', (text) => { clipboard.writeText(String(text == null ? '' : text)); }, undefined);
   h('togglePin', () => cwin.togglePin(), false);
   h('getPinState', () => cwin.getPinState(), false);
@@ -166,11 +233,15 @@ function init(opts) {
     const { app, getMainWindow, userDataDir, config } = opts;
     const dir = process.env.CATALOG_DATA_DIR || path.join(userDataDir, 'catalog');
     fs.mkdirSync(dir, { recursive: true });
+    dataDir = dir;
+    appRef = app;
     imagesDir = path.join(dir, 'images');
     configStore = createConfigStore(dir);
     configStore.load();
     if (config && Object.keys(config).length) configStore.update(config);
     store = createStore(dir).load();
+    migrate.cleanupTmp(dir); // leftovers of an interrupted import
+    backup = createBackup({ dir, store, getConfig: () => configStore.get() });
     images = createImages(imagesDir);
     outbox = createOutbox(dir).load();
     sync = createSync({
@@ -191,6 +262,7 @@ function init(opts) {
     } catch (e) { console.warn('[catalog] powerMonitor unavailable:', e.message); }
     sync.start({ watchNetwork: true }); // also listens for network interface changes (hotspot switch)
     cwin.initHotkey();
+    backup.startDaily();
     app.on('before-quit', () => shutdown());
     inited = true;
     console.log('[catalog] ready, dir =', dir, ', items =', store.list().length);
@@ -231,6 +303,7 @@ function toggleCatalog() { try { if (cwin) cwin.toggle(); } catch (e) { console.
 
 function shutdown() {
   try { if (cwin) cwin.dispose(); } catch (e) { console.warn('[catalog] dispose failed', e.message); }
+  try { if (backup) backup.stop(); } catch (e) { console.warn('[catalog] backup stop failed', e.message); }
   try { if (sync) sync.stop(); } catch (e) { console.warn('[catalog] sync stop failed', e.message); }
   try { if (outbox) outbox.flush(); } catch (e) { console.warn('[catalog] outbox flush failed', e.message); }
   try { if (store) store.flush(); } catch (e) { console.warn('[catalog] flush failed', e.message); }

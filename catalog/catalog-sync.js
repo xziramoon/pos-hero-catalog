@@ -757,8 +757,21 @@ function createSync(opts) {
     return { ok: false, message: describe(r) };
   }
 
+  // Whole catalog from the Worker's GET /export (backup download). -> { ok, data?, message? }
+  async function exportAll() {
+    const w = wcfg();
+    const problem = configProblem(w);
+    if (problem) return { ok: false, message: MSG[problem] };
+    let r;
+    try { r = await request('GET', '/export', { timeoutMs: 120000 }); } catch (e) {
+      return { ok: false, message: e instanceof HttpError ? e.message : MSG.network };
+    }
+    if (!r.ok || !r.data) return { ok: false, message: describe(r) };
+    return { ok: true, data: r.data };
+  }
+
   return {
-    start, stop, syncNow, kick, setVisible, setFocused, configChanged, getStatus, ensureImage, testConnection, initWorker, confirmTarget,
+    exportAll, start, stop, syncNow, kick, setVisible, setFocused, configChanged, getStatus, ensureImage, testConnection, initWorker, confirmTarget,
     isConfigured, on: (ev, fn) => { emitter.on(ev, fn); }, off: (ev, fn) => { emitter.off(ev, fn); },
     // exposed for tests
     _cycle: cycle, _pull: pull, _push: push, _nextWait: nextWait, _problems: problems

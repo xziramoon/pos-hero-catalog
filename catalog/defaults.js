@@ -31,7 +31,7 @@ const defaults = {
     sharpenAmount: 0.35, sharpenSigma: 1.0, edgeFeatherSigma: 1.6,
     retakeMinProductPx: 220, maxUpscale: 2.0
   },
-  backup: { daily: true, keep: 14 }
+  backup: { daily: true, keep: 14, keepManual: 30 }
 };
 
 function isPlainObject(v) {

@@ -77,7 +77,7 @@ onFocusSearch(cb)    // sent each time window is shown
 // Phase 3 adds: saveImage(itemId, {orig:ArrayBuffer, thumb:ArrayBuffer, full:ArrayBuffer, hash, edit, quality, w, h}) → Item
 //               readOrig(hash) → ArrayBuffer|null
 // Phase 4 adds: getSyncStatus(), onSyncStatus(cb), testConnection(cfg), initWorker(), syncNow()
-// Phase 5 adds: importLegacy(filePath?) , onImportProgress(cb), backupNow()
+// Phase 5 adds: findLegacy, pickLegacyFile, previewLegacy, importLegacy(path), readImportImage, finishImport, onImportProgress(cb), backupNow(reason?), exportJson(source)  (see Phase 5 notes)
 ```
 Main window (`preload.js`) gets ONE new method: `heroWindow.toggleCatalog()` and
 the theme is forwarded by `heroWindow.notifyTheme(name)` (IPC `catalog:theme-from-main`).
@@ -237,3 +237,32 @@ Error JSON shape: `{ error: "code", message: "..." }`. Clock-skew reject: HTTP 4
 - Harness (`npm run harness:catalog`, `test/electron/catalog-harness/main.js`, excluded from the build): standalone Electron entry that never loads `main.js`
   (no autostart). Env: `CATALOG_HARNESS_DIR, HARNESS_SEED, HARNESS_FIXTURES, HARNESS_JS, HARNESS_STEPS, HARNESS_SHOT, HARNESS_KEEP, HARNESS_CONFIG, HARNESS_VERBOSE, HARNESS_TIMEOUT_MS`.
   Never run `electron .`; `ELECTRON_RUN_AS_NODE` must be unset.
+
+## Phase 5 notes (legacy import, "จัดรูปทั้งหมด", backups) — additions and deviations
+- `catalog/catalog-migrate.js` (pure Node, `test/migrate.test.js`): `findCandidates({appData, extraDirs})` (looks for `%APPDATA%\Catalog Hero\catalog-data.json`; reads
+  `sync-config.json` and tries EVERY string value (depth <= 3) as a folder or json path, so the key name does not matter), `readLegacy/previewLegacy/normalizeLegacy`,
+  `importLegacy({store, dir, file, onProgress})`, `readStaged`, `cleanupTmp`. Rules: item -> new ULID + `legacyId` (String of the old id; items with no id get a stable hash id);
+  `fav` = `favoriteIds` String compare; numeric `code` -> String (leading zeros are kept only when the legacy file stored a string); duplicate ids -> the later one wins (counted);
+  items with neither name nor code are dropped (counted `invalid`); unreadable dataURLs are imported WITHOUT image (counted `badImage`); categories = 'ทั่วไป' + legacy order + item cats
+  (union with the existing meta, set before the items so the legacy order leads); `shopName` only when none is set yet. Legacy file is only read (test checks sha + mtime).
+- Idempotent: a re-import matches on `legacyId`; changed name/code/cat/fav -> updated in place (local-only fields such as `shortName`, `barcodes`, `image` are kept), unchanged items are
+  NOT re-stamped (no needless sync traffic), an item deleted in the new app stays deleted (`skippedDeleted`). Image jobs are only created for items that have NO image yet, so an
+  interrupted/stopped import resumes on the next run and an image edited in the new app is never overwritten by the old 500px one.
+- Image flow: main imports all text first, stages each image as `catalog/import-tmp/<n>.img`, returns `jobs:[{itemId, legacyId, name, file, mime}]`; the renderer loops
+  `readImportImage(file)` -> `CatalogPhotoEditor.processFile` -> `toPayload` -> `saveImage` one at a time (progress + stop), then `finishImport()` deletes `import-tmp/` (also cleaned on start).
+- Legacy `auth` (scrypt record) is saved to `catalog/auth.json` (`{legacy:true, importedAt, auth}`), never in `db.json`, never synced. **The edit-lock UI is NOT implemented**; the data is only kept.
+- IPC (catalog window only): `findLegacy()` -> candidates (also whitelists them), `pickLegacyFile()` (main `dialog.showOpenDialog`, whitelists the pick), `previewLegacy(path)` -> `{ok, counts:{items,withImage,categories,favorites}, warnings, shopName, hasAuth}`,
+  `importLegacy(path)` -> `{ok, summary:{added,updated,unchanged,skippedDeleted,skipped,total}, warnings, counts, jobs, authSaved}` (backs up first as `before-import`, refuses in read-only mode,
+  paths not previously listed/picked are refused), `readImportImage(name)`, `finishImport()`, event `catalog:import-progress {phase:'text'|'text-done', done, total}` (preload `onImportProgress`),
+  `backupNow(reason?)` -> `{ok, name, error}`, `exportJson('local'|'cloud')` (main `dialog.showSaveDialog`; cloud = new `sync.exportAll()` = Worker `GET /export`; local = copy of db.json).
+- `catalog/catalog-backup.js` (`test/backup.test.js`): `createBackup({dir, store, getConfig, now})` -> `backupNow(reason)`, `ensureDaily()`, `rotate()`, `startDaily()`, `stop()`, `exportTo(file)`.
+  Names: `backups/db-YYYYMMDD.json` (daily, local date) or `db-YYYYMMDD-HHMMSS-<reason>.json` (reason sanitized `[a-z0-9-]`, e.g. `before-import`, `reprocess`, `manual`). Rotation keeps the newest
+  `backup.keep` (14) daily files and the newest `backup.keepManual` (30, new config key) reason files; **anything else, notably `db-reset-*`, is never touched**. A backup flushes the store first and copies db.json via tmp+rename; failure -> `{ok:false}`.
+  Deviation: the daily check runs on start and then EVERY HOUR (writes at most once per calendar day) instead of "every 24h", so a machine left on across midnight still gets its file.
+- UI (skill bar): "นำเข้าจาก Catalog Hero" (dialog: auto-detected files + "เลือกไฟล์...", counts preview, confirm, progress bar with phases text -> images, stop button, summary added/updated/skipped + images ผ่าน/ควรตรวจ/ควรถ่ายใหม่/ล้มเหลว +
+  sync line from sync status, button to the "ต้องตรวจรูป" tab); "จัดรูปทั้งหมด" (checkbox "เฉพาะรูปที่ยังไม่ผ่าน": quality != ok or no `edit`; always `backupNow('reprocess')` first and aborts if it fails; per item `readOrig` ->
+  `processFile(isOrig:true, edit: stored edit)` -> `saveImage` (orig not re-sent when the hash is unchanged); progress + stop; summary ok/check/retake + button to the check tab); "สำรองข้อมูล" (backup now, export JSON local/cloud).
+  A running job locks its dialog (Esc/outside click ignored) until it finishes or is stopped. Pushing to Cloudflare happens through the normal outbox (200 per POST); the dialogs only show the live sync status.
+- Harness run (30 legacy items, 22 with images, 1 corrupt): import -> 30 added, 22 images saved (10 ok / 4 check / 8 retake; synthetic fixtures), 6 favorites, 6 categories, codes `00100` kept; re-import -> 0 added / 0 updated / 30 skipped, still 30 items,
+  legacy file sha unchanged; "จัดรูปทั้งหมด" over the 22 images -> 14 ok / 4 check / 4 retake (re-processing from the stored orig re-encodes slightly differently, so a few quality verdicts differ from the first pass).
+- Known gaps: edit-lock UI; no progress event for the image phase from main (the renderer drives it); an import of tens of thousands of images runs sequentially (about 1 s per image) and the window must stay open.

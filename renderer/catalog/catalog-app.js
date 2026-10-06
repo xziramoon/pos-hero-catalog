@@ -48,7 +48,8 @@
     dialog: null,
     sync: null,
     lastCanEdit: true,
-    promptedTarget: null
+    promptedTarget: null,
+    job: null
   };
 
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -416,7 +417,7 @@
 
   // ------------------------------------------------------------------ dialogs
   function closeDialog() {
-    if (!S.dialog) return;
+    if (!S.dialog || S.dialog.locked) return; // a running batch job keeps its dialog until it ends or is stopped
     const prev = S.dialog.prevFocus;
     if (S.dialog.cleanup) { try { S.dialog.cleanup(); } catch (e) { /* ignore */ } }
     S.dialog = null;
@@ -807,7 +808,7 @@
     renderMultiBar();
     if (S.lastCanEdit !== !ro) { S.lastCanEdit = !ro; if (S.cfg) renderCard(); }
   }
-  function setSyncStatus(s) { S.sync = s; renderSync(); }
+  function setSyncStatus(s) { S.sync = s; renderSync(); if (S.job) S.job.sync(); }
 
   function confirmTargetDialog() {
     const n = S.sync && S.sync.target ? S.sync.target.itemCount : 0;
@@ -952,6 +953,266 @@
     if (!hk.active) $('hotkeyWarnText').textContent = 'ปุ่มลัด ' + hk.accelerator + ' ใช้ไม่ได้ (โปรแกรมอื่นใช้อยู่) เปิดกระเป๋าได้จากปุ่มบนหน้าต่างหลัก หรือเลือกปุ่มใหม่';
   }
 
+  // ------------------------------------------------------------------ batch tools (Phase 5): legacy import, re-process all, backup
+  const fmtN = (n) => Number(n || 0).toLocaleString('th-TH');
+  const fmtSize = (b) => (b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB');
+  const fmtDate = (ms) => new Date(ms).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' });
+  const stat = (cls, label, n) => '<span class="' + cls + '" style="display:contents"><span>' + esc(label) + '</span><b>' + fmtN(n) + '</b></span>';
+  const bindClose = (el) => el.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', closeDialog));
+
+  function syncLine() {
+    const s = S.sync;
+    if (!s || s.state === 'unconfigured') return 'ยังไม่ได้ตั้งค่า Cloudflare ข้อมูลเก็บในเครื่องนี้ก่อน';
+    if (s.state === 'ok') return 'ซิงก์ขึ้น Cloudflare แล้ว';
+    if (s.state === 'readonly') return 'เครื่องนี้ดูอย่างเดียว';
+    return 'กำลังส่งขึ้น Cloudflare · รอส่ง ' + fmtN(s.pending) + ' รายการ';
+  }
+
+  // Progress widgets of a long job. While locked, Esc / click outside do not close the dialog.
+  function jobHandle(root) {
+    const q = (id) => root.querySelector(id);
+    return {
+      bar(done, total) { const b = q('#jobBar'); if (b) b.style.width = (total ? Math.min(100, (done / total) * 100) : 0) + '%'; },
+      text(t) { const e = q('#jobText'); if (e) e.textContent = t; },
+      sub(t) { const e = q('#jobSub'); if (e) e.textContent = t; },
+      sync() { const e = q('#jobSync'); if (e) e.textContent = syncLine(); },
+      lock(v) { if (S.dialog) S.dialog.locked = v; }
+    };
+  }
+  const JOB_HTML = '<div class="cat-job-text" id="jobText" aria-live="polite"></div><div class="cat-bar" role="progressbar"><i id="jobBar"></i></div>' +
+    '<div class="cat-job-sub" id="jobSub"></div><div class="cat-job-sub" id="jobSync"></div>';
+
+  // processFile (OpenCV worker) -> saveImage for one source blob. existingHash = orig hash already stored for the item (orig bytes then not re-sent).
+  async function processAndSave(itemId, blob, opts, existingHash) {
+    const res = await PE.processFile(blob, S.cfg.image, opts);
+    const payload = await PE.toPayload(res, { includeOrig: res.hash !== existingHash });
+    const saved = await api.saveImage(itemId, payload);
+    if (!saved) throw new Error('saveImage failed');
+    upsert(saved);
+    return res.quality;
+  }
+
+  function goToCheckTab() { closeDialog(); S.tab = 'check'; S.query = ''; S.qn = ''; $('search').value = ''; refresh(); }
+
+  // ---- import from the legacy Catalog Hero (spec 9)
+  function importDialog() {
+    if (!guardEdit()) return;
+    let cands = [];
+    let file = null;
+    showDialog(
+      '<h2 id="dlgTitle">นำเข้าจาก Catalog Hero (โปรแกรมเดิม)</h2><div id="impBody"><p>กำลังค้นหาไฟล์ข้อมูลเดิม...</p></div>',
+      (root) => {
+        const q = (id) => root.querySelector(id);
+        const body = () => q('#impBody');
+        let offProgress = null;
+        S.dialog.cleanup = () => { if (offProgress) offProgress(); S.job = null; };
+
+        function renderPick() {
+          const list = cands.length
+            ? '<div class="cat-filelist" role="radiogroup" aria-label="ไฟล์ข้อมูลเดิม">' + cands.map((c, i) =>
+              '<label><input type="radio" name="legacyFile" value="' + i + '"' + (file === c.path ? ' checked' : '') + '><span>' + esc(c.path) + '<br>' +
+              (c.source === 'shared' ? 'โฟลเดอร์แชร์' : c.source === 'appdata' ? 'ในเครื่องนี้' : 'ไฟล์ที่เลือก') + (c.size ? ' · ' + fmtSize(c.size) + ' · แก้ไขล่าสุด ' + esc(fmtDate(c.mtime)) : '') + '</span></label>').join('') + '</div>'
+            : '<p>ไม่พบไฟล์ catalog-data.json ในโฟลเดอร์ปกติของ Catalog Hero กด "เลือกไฟล์..." เพื่อเลือกเอง</p>';
+          body().innerHTML = '<p>นำเข้าสินค้า หมวด ของโปรด และรูป จากไฟล์ catalog-data.json ของโปรแกรม Catalog Hero เดิม ไฟล์เดิมจะไม่ถูกแก้ไขหรือลบ และนำเข้าซ้ำได้โดยไม่ซ้ำซ้อน</p>' +
+            list + '<div id="impPrev"></div>' +
+            '<div class="cat-dlg-actions"><button type="button" class="cat-btn left" id="impPick">เลือกไฟล์...</button>' +
+            '<button type="button" class="cat-btn" data-close>ยกเลิก</button><button type="button" class="cat-btn cat-btn-primary" id="impGo" disabled>นำเข้า</button></div>';
+          bindClose(body());
+          body().querySelectorAll('input[name=legacyFile]').forEach((r) => r.addEventListener('change', () => choose(cands[+r.value].path)));
+          q('#impPick').addEventListener('click', async () => {
+            const f = await api.pickLegacyFile();
+            if (!f) return;
+            if (!cands.some((c) => c.path === f)) cands.unshift({ path: f, size: 0, mtime: 0, source: 'extra' });
+            file = f; renderPick(); choose(f);
+          });
+          if (file) choose(file); else if (cands.length) { file = cands[0].path; renderPick(); }
+        }
+
+        async function choose(f) {
+          file = f;
+          if (!q('#impPrev')) return;
+          q('#impGo').disabled = true;
+          q('#impPrev').innerHTML = '<div class="cat-job-sub">กำลังตรวจไฟล์...</div>';
+          const r = await api.previewLegacy(f);
+          if (file !== f || !q('#impPrev')) return;
+          if (!r.ok) { q('#impPrev').innerHTML = '<div class="cat-conn-msg bad">' + esc(r.error || 'อ่านไฟล์ไม่ได้') + '</div>'; return; }
+          const w = r.warnings || {};
+          q('#impPrev').innerHTML = '<div class="cat-stats" id="impCounts">' + stat('', 'สินค้า', r.counts.items) + stat('', 'มีรูป', r.counts.withImage) +
+            stat('', 'หมวด', r.counts.categories) + stat('', 'ของโปรด', r.counts.favorites) +
+            (w.invalid ? stat('bad', 'ข้าม (ไม่มีทั้งชื่อและรหัส)', w.invalid) : '') +
+            (w.badImage ? stat('bad', 'รูปที่อ่านไม่ได้ (นำเข้าโดยไม่มีรูป)', w.badImage) : '') +
+            (w.dupIds ? stat('', 'รหัสภายในซ้ำ (ใช้อันหลังสุด)', w.dupIds) : '') + '</div>' +
+            (r.shopName ? '<div class="cat-job-sub">ชื่อร้าน: ' + esc(r.shopName) + '</div>' : '') +
+            (r.hasAuth ? '<div class="cat-job-sub">พบรหัสล็อกการแก้ไขเดิม: เก็บไว้ในเครื่องนี้เท่านั้น ไม่ส่งขึ้น Cloudflare (ระบบล็อกยังไม่เปิดใช้ในเวอร์ชันนี้)</div>' : '');
+          const go = q('#impGo');
+          go.textContent = 'นำเข้า ' + fmtN(r.counts.items) + ' รายการ';
+          go.disabled = !r.counts.items;
+          go.onclick = () => startImport();
+        }
+
+        async function startImport() {
+          let stop = false;
+          body().innerHTML = JOB_HTML + '<div class="cat-dlg-actions"><button type="button" class="cat-btn cat-btn-danger" id="impStop">หยุด</button></div>';
+          const job = jobHandle(root); job.lock(true);
+          q('#impStop').addEventListener('click', () => { stop = true; q('#impStop').disabled = true; job.sub('กำลังหยุดหลังรูปปัจจุบัน...'); });
+          job.text('กำลังนำเข้าข้อมูลสินค้า...'); job.sync();
+          S.job = job;
+          offProgress = api.onImportProgress((p) => { if (p.phase === 'text' || p.phase === 'text-done') { job.bar(p.done, p.total); job.sub(fmtN(p.done) + ' / ' + fmtN(p.total) + ' รายการ'); } });
+          const imgs = { ok: 0, check: 0, retake: 0, failed: 0, left: 0 };
+          let r = null;
+          try {
+            r = await api.importLegacy(file);
+            if (!r || !r.ok) throw new Error((r && r.error) || 'นำเข้าไม่สำเร็จ');
+            S.meta = (await api.getMeta()) || S.meta;
+            const jobs = r.jobs || [];
+            for (let i = 0; i < jobs.length; i++) {
+              if (stop) { imgs.left = jobs.length - i; break; }
+              const j = jobs[i];
+              job.text('กำลังตัดแต่งรูป ' + fmtN(i + 1) + ' / ' + fmtN(jobs.length) + ' · ' + j.name);
+              job.bar(i, jobs.length);
+              job.sub(imgs.ok + ' ผ่าน · ' + imgs.check + ' ควรตรวจ · ' + imgs.retake + ' ควรถ่ายใหม่' + (imgs.failed ? ' · ' + imgs.failed + ' ล้มเหลว' : ''));
+              try {
+                const bytes = await api.readImportImage(j.file);
+                if (!bytes) throw new Error('missing staged image');
+                const quality = await processAndSave(j.itemId, new Blob([bytes], { type: j.mime || 'image/jpeg' }), {}, null);
+                imgs[quality] = (imgs[quality] || 0) + 1;
+              } catch (e) { console.warn('[catalog] import image failed', j.legacyId, e); imgs.failed++; }
+            }
+            job.bar(1, 1);
+          } catch (e) {
+            console.warn('[catalog] import failed', e);
+            job.lock(false);
+            body().innerHTML = '<div class="cat-conn-msg bad">' + esc(e.message || 'นำเข้าไม่สำเร็จ') + '</div><div class="cat-dlg-actions"><button type="button" class="cat-btn cat-btn-primary" data-close>ปิด</button></div>';
+            bindClose(body());
+            try { await api.finishImport(); } catch (_) { /* ignore */ }
+            return;
+          }
+          try { await api.finishImport(); } catch (_) { /* ignore */ }
+          job.lock(false);
+          const s = r.summary; const w = r.warnings || {};
+          body().innerHTML = '<div class="cat-job-text">นำเข้าเสร็จแล้ว</div><div class="cat-stats" id="impSummary">' +
+            stat('ok', 'เพิ่มใหม่', s.added) + stat('', 'อัปเดต', s.updated) + stat('', 'ข้าม (ไม่เปลี่ยน/ว่าง/ลบไปแล้ว)', s.unchanged + s.skipped + s.skippedDeleted) +
+            '<span class="sec">รูป</span>' + stat('ok', 'ผ่าน', imgs.ok) + stat('check', 'ควรตรวจ', imgs.check) + stat('retake', 'ควรถ่ายใหม่', imgs.retake) +
+            (imgs.failed ? stat('bad', 'ล้มเหลว', imgs.failed) : '') + (imgs.left ? stat('bad', 'ยังไม่ได้ทำ (นำเข้าอีกครั้งเพื่อทำต่อ)', imgs.left) : '') +
+            (w.badImage ? stat('bad', 'รูปเดิมที่อ่านไม่ได้', w.badImage) : '') + '</div>' +
+            '<div class="cat-job-sub" id="jobSync">' + esc(syncLine()) + '</div>' +
+            '<div class="cat-dlg-actions">' + (imgs.check + imgs.retake ? '<button type="button" class="cat-btn" id="impCheck">ไปที่แท็บ "ต้องตรวจรูป"</button>' : '') +
+            '<button type="button" class="cat-btn cat-btn-primary" data-close>ปิด</button></div>';
+          bindClose(body());
+          const c = q('#impCheck'); if (c) c.addEventListener('click', goToCheckTab);
+          S.tab = 'all'; refresh({ keepScroll: true });
+        }
+
+        (async () => {
+          try { cands = (await api.findLegacy()) || []; } catch (e) { cands = []; }
+          renderPick();
+        })();
+      },
+      'wide'
+    );
+  }
+
+  // ---- "จัดรูปทั้งหมด" (spec 8.6)
+  function reprocessDialog() {
+    if (!guardEdit()) return;
+    const withImage = () => itemsArr().filter(hasImg);
+    const unfinished = (it) => !it.image.edit || it.image.quality !== 'ok';
+    if (!withImage().length) { toast('ยังไม่มีสินค้าที่มีรูปให้จัดใหม่', true); return; }
+    showDialog(
+      '<h2 id="dlgTitle">จัดรูปทั้งหมด</h2><div id="rpBody">' +
+      '<p>ตัดแต่งรูปสินค้าใหม่ทั้งหมดจากรูปต้นฉบับ ด้วยขั้นตอนล่าสุดของระบบ (ค่าที่เคยปรับด้วยมือ เช่น แปรง หมุน ครอป ความสว่าง จะยังอยู่) ทำทีละรูป หยุดได้ทุกเมื่อ ระบบจะสำรองข้อมูลก่อนเริ่มเสมอ ย้อนกลับได้จากโฟลเดอร์ backups</p>' +
+      '<label class="cat-check"><input type="checkbox" id="rpOnly"> เฉพาะรูปที่ยังไม่ผ่าน (ควรตรวจ/ควรถ่ายใหม่ หรือยังไม่มีค่าตัดแต่ง)</label>' +
+      '<div class="cat-job-text" id="rpCount"></div>' +
+      '<div class="cat-dlg-actions"><button type="button" class="cat-btn" data-close>ยกเลิก</button><button type="button" class="cat-btn cat-btn-primary" id="rpGo">เริ่มจัดรูป</button></div></div>',
+      (root) => {
+        const q = (id) => root.querySelector(id);
+        S.dialog.cleanup = () => { S.job = null; };
+        const pick = () => (q('#rpOnly').checked ? withImage().filter(unfinished) : withImage());
+        const upd = () => { const n = pick().length; q('#rpCount').textContent = 'จะจัดใหม่ ' + fmtN(n) + ' รูป'; q('#rpGo').disabled = !n; };
+        q('#rpOnly').addEventListener('change', upd); upd();
+        q('#rpGo').addEventListener('click', async () => {
+          const ids = pick().map((i) => i.id);
+          if (!ids.length) return;
+          const body = q('#rpBody');
+          body.innerHTML = JOB_HTML;
+          const job = jobHandle(root); job.lock(true);
+          S.job = job;
+          job.text('กำลังสำรองข้อมูล...');
+          const bk = await api.backupNow('reprocess');
+          if (!bk || !bk.ok) {
+            job.lock(false);
+            body.innerHTML = '<div class="cat-conn-msg bad">สำรองข้อมูลก่อนเริ่มไม่สำเร็จ จึงยังไม่จัดรูปให้ ' + esc((bk && bk.error) || '') + '</div><div class="cat-dlg-actions"><button type="button" class="cat-btn cat-btn-primary" data-close>ปิด</button></div>';
+            bindClose(body);
+            return;
+          }
+          let stop = false;
+          body.insertAdjacentHTML('beforeend', '<div class="cat-dlg-actions"><button type="button" class="cat-btn cat-btn-danger" id="rpStop">หยุด</button></div>');
+          q('#rpStop').addEventListener('click', () => { stop = true; q('#rpStop').disabled = true; job.sub('กำลังหยุดหลังรูปปัจจุบัน...'); });
+          const cnt = { ok: 0, check: 0, retake: 0, failed: 0, noOrig: 0, left: 0 };
+          for (let i = 0; i < ids.length; i++) {
+            if (stop) { cnt.left = ids.length - i; break; }
+            const it = S.items.get(ids[i]);
+            if (!it || !hasImg(it)) continue;
+            job.text('กำลังจัดรูป ' + fmtN(i + 1) + ' / ' + fmtN(ids.length) + ' · ' + labelOf(it));
+            job.bar(i, ids.length);
+            job.sub(cnt.ok + ' ผ่าน · ' + cnt.check + ' ควรตรวจ · ' + cnt.retake + ' ควรถ่ายใหม่' + (cnt.failed + cnt.noOrig ? ' · ' + (cnt.failed + cnt.noOrig) + ' ข้าม/ล้มเหลว' : ''));
+            job.sync();
+            try {
+              const buf = await api.readOrig(it.image.hash);
+              if (!buf) { cnt.noOrig++; continue; }
+              const quality = await processAndSave(it.id, new Blob([buf], { type: 'image/jpeg' }), { isOrig: true, edit: it.image.edit || {} }, it.image.hash);
+              cnt[quality] = (cnt[quality] || 0) + 1;
+            } catch (e) { console.warn('[catalog] reprocess failed', it.id, e); cnt.failed++; }
+          }
+          job.bar(1, 1);
+          job.lock(false);
+          body.innerHTML = '<div class="cat-job-text">' + (cnt.left ? 'หยุดแล้ว' : 'จัดรูปเสร็จแล้ว') + '</div><div class="cat-stats" id="rpSummary">' +
+            stat('ok', 'ผ่าน', cnt.ok) + stat('check', 'ควรตรวจ', cnt.check) + stat('retake', 'ควรถ่ายใหม่', cnt.retake) +
+            (cnt.noOrig ? stat('bad', 'ไม่พบรูปต้นฉบับ (ข้าม)', cnt.noOrig) : '') + (cnt.failed ? stat('bad', 'ล้มเหลว', cnt.failed) : '') +
+            (cnt.left ? stat('', 'ยังไม่ได้ทำ', cnt.left) : '') + '</div>' +
+            '<div class="cat-job-sub">สำรองข้อมูลไว้ที่ backups/' + esc(bk.name || '') + '</div><div class="cat-job-sub" id="jobSync">' + esc(syncLine()) + '</div>' +
+            '<div class="cat-dlg-actions">' + (cnt.check + cnt.retake ? '<button type="button" class="cat-btn" id="rpCheck">ไปที่แท็บ "ต้องตรวจรูป"</button>' : '') +
+            '<button type="button" class="cat-btn cat-btn-primary" data-close>ปิด</button></div>';
+          bindClose(body);
+          const c = q('#rpCheck'); if (c) c.addEventListener('click', goToCheckTab);
+          refresh({ keepScroll: true });
+        });
+      },
+      'wide'
+    );
+  }
+
+  // ---- backup (spec 7.2): a copy in backups/, optional export of the JSON to a chosen path
+  function backupDialog() {
+    showDialog(
+      '<h2 id="dlgTitle">สำรองข้อมูล</h2>' +
+      '<p>โปรแกรมสำรองข้อมูลสินค้าให้อัตโนมัติวันละครั้ง (เก็บ 14 วันล่าสุด) ในโฟลเดอร์ backups ของกระเป๋าสินค้า ถ้าอยากสำรองเดี๋ยวนี้ หรือเก็บสำเนาไว้ที่อื่น เลือกได้ด้านล่าง</p>' +
+      '<div class="cat-conn-msg" id="bkMsg" role="status" aria-live="polite"></div>' +
+      '<div class="cat-dlg-actions"><button type="button" class="cat-btn" id="bkNow">สำรองตอนนี้</button>' +
+      '<button type="button" class="cat-btn" id="bkLocal">ส่งออก JSON (จากเครื่องนี้)...</button>' +
+      '<button type="button" class="cat-btn" id="bkCloud">ส่งออก JSON (จาก Cloudflare)...</button>' +
+      '<button type="button" class="cat-btn cat-btn-primary" data-close>ปิด</button></div>',
+      (root) => {
+        const q = (id) => root.querySelector(id);
+        const msg = (t, kind) => { const m = q('#bkMsg'); m.textContent = t; m.className = 'cat-conn-msg' + (kind ? ' ' + kind : ''); };
+        q('#bkCloud').hidden = !(S.sync && S.sync.configured);
+        q('#bkNow').addEventListener('click', async () => {
+          const r = await api.backupNow('manual');
+          if (r && r.ok) msg('สำรองแล้ว: backups/' + r.name, 'good'); else msg('สำรองไม่สำเร็จ ' + ((r && r.error) || ''), 'bad');
+        });
+        const exp = (source) => async () => {
+          msg('กำลังส่งออก...');
+          const r = await api.exportJson(source);
+          if (r && r.ok) msg('ส่งออกแล้ว: ' + r.file, 'good');
+          else if (r && r.canceled) msg('');
+          else msg('ส่งออกไม่สำเร็จ ' + ((r && r.error) || ''), 'bad');
+        };
+        q('#bkLocal').addEventListener('click', exp('local'));
+        q('#bkCloud').addEventListener('click', exp('cloud'));
+      }
+    );
+  }
+
   // ------------------------------------------------------------------ search + keyboard
   const search = $('search');
   search.addEventListener('input', () => {
@@ -1017,6 +1278,9 @@
   $('btnDelMulti').addEventListener('click', () => { const ids = Array.from(S.picked); if (ids.length) confirmDelete(ids); });
   $('btnSettings').addEventListener('click', settingsDialog);
   $('btnCloud').addEventListener('click', cloudDialog);
+  $('btnImport').addEventListener('click', importDialog);
+  $('btnReprocess').addEventListener('click', reprocessDialog);
+  $('btnBackup').addEventListener('click', backupDialog);
   $('syncProblemsBtn').addEventListener('click', problemsDialog);
   $('syncLed').addEventListener('click', () => { if (S.sync && S.sync.state === 'confirm-target') confirmTargetDialog(); else cloudDialog(); });
   $('syncWarnBtn').addEventListener('click', cloudDialog);
