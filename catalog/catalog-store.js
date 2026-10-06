@@ -40,6 +40,10 @@ function createStore(dir, opts = {}) {
   let lastRev = 0;
   let deviceId = opts.deviceId || null;
   let clockOffset = 0;
+  const synced = new Map(); // id -> 'updatedAt|updatedBy' last known to be on the server
+  const stampOf = (it) => it.updatedAt + '|' + it.updatedBy;
+  let retryTimer = null;
+  let retryMs = 1000;
   let syncId = null; // identity (worker url + key) that lastRev/rev values belong to
   let timer = null;
   let dirty = false;
@@ -67,6 +71,8 @@ function createStore(dir, opts = {}) {
       if (!deviceId && data.deviceId) deviceId = data.deviceId;
       if (Number.isFinite(data.clockOffset)) clockOffset = data.clockOffset;
       if (typeof data.syncId === 'string') syncId = data.syncId;
+      synced.clear();
+      if (data.synced && typeof data.synced === 'object') for (const [k, v] of Object.entries(data.synced)) synced.set(k, String(v));
     }
     if (!deviceId) { deviceId = newDeviceId(); scheduleWrite(); }
     ensureCategories();
@@ -91,14 +97,21 @@ function createStore(dir, opts = {}) {
     if (!dirty) return true;
     try {
       fs.mkdirSync(dir, { recursive: true });
-      const obj = { items: Object.fromEntries(items), meta, lastRev, deviceId, clockOffset, syncId };
+      const obj = { items: Object.fromEntries(items), meta, lastRev, deviceId, clockOffset, syncId, synced: Object.fromEntries(synced) };
       const tmp = file + '.tmp';
       fs.writeFileSync(tmp, JSON.stringify(obj));
       fs.renameSync(tmp, file);
       dirty = false;
+      retryMs = 1000;
       return true;
     } catch (e) {
       console.warn('[catalog] db.json write failed:', e.message);
+      // antivirus / sharing violations are usually transient: keep dirty and retry with backoff
+      if (!retryTimer) {
+        retryTimer = setTimeout(() => { retryTimer = null; flush(); }, retryMs);
+        if (retryTimer.unref) retryTimer.unref();
+        retryMs = Math.min(30000, retryMs * 2);
+      }
       return false;
     }
   }
@@ -197,12 +210,13 @@ function createStore(dir, opts = {}) {
       const remote = normRemote(raw);
       if (!remote) continue;
       const local = items.get(remote.id);
-      if (!local) { items.set(remote.id, remote); applied.push(remote.id); continue; }
+      if (!local) { items.set(remote.id, remote); synced.set(remote.id, stampOf(remote)); applied.push(remote.id); continue; }
       if (sameStamp(local, remote)) {
+        if (synced.get(remote.id) !== stampOf(remote)) { synced.set(remote.id, stampOf(remote)); revOnly = true; }
         if (remote.rev != null && local.rev !== remote.rev) { local.rev = remote.rev; revOnly = true; }
         continue;
       }
-      if (mergeItem(local, remote) === remote) { items.set(remote.id, remote); applied.push(remote.id); } else kept.push(remote.id);
+      if (mergeItem(local, remote) === remote) { items.set(remote.id, remote); synced.set(remote.id, stampOf(remote)); applied.push(remote.id); } else kept.push(remote.id);
     }
     if (applied.length) { scheduleWrite(); emitChanged(applied); } else if (revOnly) scheduleWrite();
     return { applied, kept };
@@ -221,6 +235,12 @@ function createStore(dir, opts = {}) {
     }
     for (const id of keep) if (!next.has(id) && items.has(id)) next.set(id, items.get(id));
     items = next;
+    synced.clear();
+    for (const raw of list || []) {
+      const r = normRemote(raw);
+      const cur = r && items.get(r.id);
+      if (cur && sameStamp(cur, r)) synced.set(r.id, stampOf(r));
+    }
     scheduleWrite();
     emitChanged(null);
     return { count: items.size };
@@ -243,7 +263,7 @@ function createStore(dir, opts = {}) {
     }
     meta = Object.assign({}, meta, remote, { categories: cats });
     ensureCategories();
-    if (needsPush) meta.updatedAt = now();
+    if (needsPush) meta.updatedAt = Math.max(now(), rt + 1);
     scheduleWrite();
     emitChanged(null);
     return { applied: true, needsPush };
@@ -258,9 +278,34 @@ function createStore(dir, opts = {}) {
   function resetSyncState(id) {
     syncId = id;
     lastRev = 0;
+    synced.clear();
     meta.rev = 0;
     for (const it of items.values()) delete it.rev;
     scheduleWrite();
+  }
+  function markSynced(id, stamp) {
+    const it = items.get(id);
+    const s = stamp || (it && stampOf(it));
+    if (s && synced.get(id) !== s) { synced.set(id, s); scheduleWrite(); }
+  }
+  const isSynced = (it) => synced.get(it.id) === stampOf(it);
+  // Safety copy of the whole db (used before destructive re-pulls): backups/db-<label>-<ts>.json, newest 5 kept.
+  function snapshot(label) {
+    try {
+      flush();
+      const bdir = path.join(dir, 'backups');
+      fs.mkdirSync(bdir, { recursive: true });
+      const f = path.join(bdir, 'db-' + label + '-' + Date.now() + '.json');
+      const obj = { items: Object.fromEntries(items), meta, lastRev, deviceId, clockOffset, syncId, synced: Object.fromEntries(synced) };
+      fs.writeFileSync(f + '.tmp', JSON.stringify(obj));
+      fs.renameSync(f + '.tmp', f);
+      const mine = fs.readdirSync(bdir).filter((n) => n.startsWith('db-' + label + '-')).sort();
+      while (mine.length > 5) { try { fs.unlinkSync(path.join(bdir, mine.shift())); } catch (_) { /* ignore */ } }
+      return f;
+    } catch (e) {
+      console.warn('[catalog] snapshot failed:', e.message);
+      return null;
+    }
   }
   function setSyncId(id) { if (syncId !== id) { syncId = id; scheduleWrite(); } }
   function setMetaRev(rev) { if (meta.rev !== rev) { meta.rev = rev; scheduleWrite(); } }
@@ -280,7 +325,7 @@ function createStore(dir, opts = {}) {
   function restampMeta() { meta.updatedAt = now(); scheduleWrite(); return meta; }
 
   const api = {
-    resetSyncState, setSyncId, get syncId() { return syncId; },
+    markSynced, isSynced, snapshot, resetSyncState, setSyncId, get syncId() { return syncId; },
     applyRemote, resetAll, applyRemoteMeta, setRev, setMetaRev, restamp, restampMeta,
     load, get, put, putMany, list, remove, getMeta, setMeta, changesSince, flush, now,
     get lastRev() { return lastRev; },

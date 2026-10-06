@@ -5,7 +5,9 @@
 const defaults = {
   worker: {
     url: '', key: '', writeToken: '', pollMsVisible: 5000, pollMsHidden: 60000,
-    requestTimeoutMs: 20000, imageTimeoutMs: 60000, batchSize: 200, warnAfterMs: 180000
+    pollMsUnfocused: 15000, pollBackoffMaxMs: 60000,
+    requestTimeoutMs: 20000, imageTimeoutMs: 60000, batchSize: 200, warnAfterMs: 180000,
+    maxConcurrentDownloads: 4, maxImageBytes: 5 * 1024 * 1024
   },
   window: {
     // Needs a Ctrl/Alt modifier: a bare F-key is global and steals it from the POS (Sea & Hill uses F2). '' = no hotkey.

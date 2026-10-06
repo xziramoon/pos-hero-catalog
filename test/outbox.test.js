@@ -92,6 +92,25 @@ try {
     fs.rmSync(ob.file, { force: true });
   }
 
+  // ---- permanently failing image stops blocking its item; soft reset leaves it alone
+  {
+    const { PERMANENT_TRIES } = require('../catalog/catalog-outbox');
+    const ob = createOutbox(tmp, { now: () => 0 }).load();
+    ob.enqueueItem(item('P', { image: { hash: H1, ver: 1 } }));
+    ob.enqueueImage(H1, 'thumb', 1);
+    for (let i = 0; i < PERMANENT_TRIES - 1; i++) ob.fail('img:' + H1 + '/thumb-v1', 0);
+    assert.strictEqual(ob.ready(1e9).item.length, 0, 'still blocked below the limit');
+    ob.fail('img:' + H1 + '/thumb-v1', 0);
+    assert.deepStrictEqual(ob.ready(1e9).item.map((e) => e.payload.id), ['P'], 'item goes out after N failed tries');
+    ob.enqueueItem(item('Q')); ob.fail('item:Q', 0);
+    ob.resetBackoff({ soft: true });
+    assert.strictEqual(ob.get('img:' + H1 + '/thumb-v1').tries, PERMANENT_TRIES, 'permanent entry keeps its backoff');
+    assert.strictEqual(ob.getItem('Q').tries, 0, 'ordinary entry is retried now');
+    ob.resetBackoff();
+    assert.strictEqual(ob.get('img:' + H1 + '/thumb-v1').tries, 0, 'manual retry resets everything');
+    fs.rmSync(ob.file, { force: true });
+  }
+
   // ---- persistence
   {
     const a = createOutbox(tmp).load();

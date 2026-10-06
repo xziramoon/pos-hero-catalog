@@ -26,7 +26,7 @@ const KEY = 'k'.repeat(40);
       fetch: async (url, o) => {
         calls.push(o.method + ' ' + url.replace(/^.*\/catalog\/[^/]+/, ''));
         if (down) throw new TypeError('fetch failed');
-        const body = url.includes('/changes') ? { items: [], rev: 0, more: false, serverTime: t } : { accepted: [], rejected: [], rev: 0, serverTime: t };
+        const body = url.includes('/changes') ? { items: [], rev: 0, more: false, serverTime: Date.now() } : { accepted: [], rejected: [], rev: 0, serverTime: Date.now() };
         return { ok: true, status: 200, text: async () => JSON.stringify(body), headers: { get: () => null } };
       }
     });
@@ -46,7 +46,7 @@ const KEY = 'k'.repeat(40);
     await sync._cycle();
     let s = sync.getStatus();
     assert.strictEqual(s.state, 'offline'); assert.ok(/ต่อ Worker ไม่ได้/.test(s.lastError)); assert.strictEqual(s.warn, false);
-    assert.deepStrictEqual(calls, ['GET /changes?since=0&limit=500'], 'push is skipped while pull fails');
+    assert.deepStrictEqual(calls, ['GET /health'], 'nothing is pushed while the target cannot be checked');
     t += 4 * 60 * 1000;
     await sync._cycle();
     s = sync.getStatus();

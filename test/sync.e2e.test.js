@@ -155,7 +155,7 @@ async function main() {
   await sleep(30);
   A.store.put({ id: c1.id, name: 'C2 จาก A (ใหม่กว่า)' });
   await sleep(100);
-  A.offline = false; await waitFor(() => A.sync.getStatus().pending === 0, 10000, 'A pushed first');
+  A.offline = false; A.sync.syncNow(); await waitFor(() => A.sync.getStatus().pending === 0, 10000, 'A pushed first');
   B.offline = false; B.sync.syncNow();
   await waitFor(() => B.store.get(c1.id).name === 'C2 จาก A (ใหม่กว่า)' && A.store.get(c1.id).name === 'C2 จาก A (ใหม่กว่า)', 10000, 'stale rejection merges current');
   await waitFor(() => B.sync.getStatus().pending === 0, 10000, 'B drained after stale');
@@ -236,8 +236,9 @@ async function main() {
     });
     s2.start();
     await waitFor(() => B.store.get(unsent.id), 10000, 'unsent edit delivered after reset');
-    // ghost was never on the server and was not pending -> must be gone after the reset
-    assert.strictEqual(D.store.get('ghost'), null, 'unknown non-pending item dropped by resetAll');
+    // the server is behind our lastRev (as if it had been wiped): the only copies are local, so they are kept and re-pushed
+    await waitFor(() => A.store.get('ghost'), 10000, 'ghost re-queued to the server');
+    assert.ok(D.store.get('ghost'), 'local-only item survives the reset');
     assert.ok(D.store.lastRev > 0 && D.store.lastRev < 999999, 'lastRev reset: ' + D.store.lastRev);
     for (const n of serverNames) assert.ok(D.store.list().some((i) => i.name === n), 'D has ' + n);
     s2.stop();
