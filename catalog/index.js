@@ -121,6 +121,7 @@ function registerIpc() {
   h('getSyncStatus', () => sync.getStatus(), null);
   h('testConnection', (cfg) => sync.testConnection(cfg), { ok: false, message: 'ทดสอบไม่สำเร็จ ลองอีกครั้ง' });
   h('initWorker', () => sync.initWorker(), { ok: false, message: 'เริ่มใช้งานคีย์ไม่สำเร็จ ลองอีกครั้ง' });
+  h('confirmTarget', () => sync.confirmTarget(), { ok: false });
   h('syncNow', () => { sync.syncNow(); return sync.getStatus(); }, null);
   // The write token lives only in main-process config; it is never returned to the renderer.
   h('set-write-token', (token) => {
@@ -162,17 +163,18 @@ function init(opts) {
     sync = createSync({
       store, outbox, images,
       getConfig: () => configStore.get(),
-      isVisible: () => !!(cwin && cwin.isVisible())
+      isVisible: () => !!(cwin && cwin.isVisible()),
+      isFocused: () => !!(cwin && cwin.isFocused())
     });
-    cwin = createCatalogWindow({ getMainWindow, configStore, onVisibility: (v) => sync && sync.setVisible(v) });
+    cwin = createCatalogWindow({ getMainWindow, configStore, onVisibility: (v) => sync && sync.setVisible(v), onFocus: (f) => sync && sync.setFocused(f) });
 
     registerImageProtocol();
     registerIpc();
     store.on('changed', ({ ids }) => cwin.send('catalog:changed', { ids }));
     sync.on('status', (s) => cwin.send('catalog:sync-status', s));
     try {
-      powerMonitor.on('resume', () => sync.syncNow());
-      powerMonitor.on('unlock-screen', () => sync.syncNow());
+      powerMonitor.on('resume', () => sync.syncNow({ soft: true }));
+      powerMonitor.on('unlock-screen', () => sync.syncNow({ soft: true }));
     } catch (e) { console.warn('[catalog] powerMonitor unavailable:', e.message); }
     sync.start({ watchNetwork: true }); // also listens for network interface changes (hotspot switch)
     cwin.initHotkey();

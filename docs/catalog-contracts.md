@@ -162,3 +162,29 @@ Error JSON shape: `{ error: "code", message: "..." }`. Clock-skew reject: HTTP 4
 - CSP of the catalog page is now `connect-src 'self'` (the renderer never talks to the Worker; all HTTP is in the main process).
 - Tests: `test/outbox.test.js`, `test/store-merge.test.js`, `test/sync-offline.test.js` (fake fetch/clock), and `test/sync.e2e.test.js`
   (skipped unless `CATALOG_E2E_BASE`, e.g. `cd cloudflare-inbox && npx wrangler dev` then `CATALOG_E2E_BASE=http://127.0.0.1:8787 node test/sync.e2e.test.js`).
+
+## Phase 4 review fixes — pinned behaviour
+- **Clock**: `store.clockOffset` is re-measured from `serverTime` on every successful JSON response (sample = serverTime - request midpoint, ignored when RTT > 5 s):
+  `|sample| < 3 s` -> offset 0; otherwise the offset follows the sample when it moved by more than 3 s. A 409 `clock_skew` sets the offset and re-stamps ONLY pending
+  items/meta whose `updatedAt` exceeds `serverTime + 10 min`; older, correctly stamped offline edits keep their time. `applyRemoteMeta` re-stamps with `max(now, remote.updatedAt + 1)`.
+- **Resets** (`resetRequired`): `db.json` is first copied to `backups/db-reset-<ts>.json` (newest 5 kept; Phase 6's daily `db-YYYYMMDD.json` rotation must ignore this prefix).
+  If the server's `rev` is BEHIND our `lastRev` (server wiped) every local item is kept and re-queued (`reconcile`, plus image re-upload); for a tombstone-horizon reset only pending, never-synced
+  and rejected items are kept. The store tracks `synced[id] = 'updatedAt|updatedBy'` (persisted in db.json): anything whose current stamp differs and is not queued is re-queued on start / config change / reset.
+- **Target safety**: after a Worker URL/Key change, if this device has local items and a write token and the target is initialized with `itemCount > 0`, status becomes `state:'confirm-target'`
+  (`target:{itemCount}`); no pull/push happens until IPC `confirmTarget()` (preload `confirmTarget`). The UI shows "แคตตาล็อกนี้มีสินค้าอยู่แล้ว N ชิ้น จะรวมสินค้าในเครื่องเข้าไปไหม".
+  On adopting a new target all locally referenced images (orig/thumb/full that exist on disk) are re-queued for upload. Known gap: a read-only device (no token) adopts without asking;
+  if a token is added later its old local-only items are queued without a prompt.
+- **Problems**: status has `problemCount` and `problems:[{id, kind:'item'|'image', reason(Thai)}]` (max 50). Items rejected with a non-`stale` reason and images rejected (400/413/415) or failing
+  `PERMANENT_TRIES` (5) times are listed; editing the item / a later successful upload clears them. A failing image no longer aborts the push (meta and items still go); after 5 failed tries its items
+  are pushed without waiting and the image stays queued with 2s..5min backoff.
+- **Security**: all Worker fetches use `redirect:'error'`; `testConnection` only attaches the saved write token when the URL equals the saved URL; `http://` Worker URLs are rejected except `localhost`/`127.0.0.1`/`[::1]`.
+- **Downloads**: lazy image downloads are capped at `worker.maxConcurrentDownloads` (4) concurrent and `worker.maxImageBytes` (5 MB, checked on Content-Length and while streaming); in-flight keys are normalized (lowercase hash, `orig` has no ver).
+- **Durability**: the outbox is written synchronously inside the local-edit handler (before the IPC call returns); db.json stays debounced (300 ms) and is covered by the `synced` re-queue above. Failed writes of
+  `db.json` / `outbox.json` retry with 1s..30s backoff.
+- **Polling and request math** (config `worker.*`): visible + focused `pollMsVisible` 5 s; visible but unfocused `pollMsUnfocused` 15 s; hidden `pollMsHidden` 60 s. Consecutive failed pulls double the interval
+  (`base * 2^n`, capped at `pollBackoffMaxMs` 60 s); the "fails > warnAfterMs" warning bar is unaffected. Gaining focus/visibility, network change (IPv4 interface fingerprint, 5 s check), power resume and
+  manual "sync now" trigger an immediate cycle; automatic triggers use `soft` retry (do not reset the backoff of entries with >= 5 failed tries), the manual button resets everything.
+  Per machine and day with 4 h focused (2,880 pulls) + 6 h unfocused (1,440) + 14 h hidden (840) = about 5,200 pulls; four machines about 21k Worker requests and 21k Durable Object requests per day
+  (+ pushes/images, a few hundred). Worst case, 4 machines focused 24 h = 69k/day. Cloudflare's free quota is, to our knowledge, 100k requests/day each for Workers and Durable Objects; re-check the dashboard. Inbox adds about 290/day.
+  Note: a catalog window that stays visible but unfocused next to the POS syncs every 15 s, so edits can take up to ~15 s to show there (they appear immediately when it is focused).
+- Tests: `test/sync-safety.test.js` (fake Worker in `test/fake-worker.js`) covers each item above; `test/sync.e2e.test.js` now expects the wiped-server case to keep and re-push local-only items.

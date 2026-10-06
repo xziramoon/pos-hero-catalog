@@ -23,6 +23,9 @@ html, body.cat-body { height: 100%; overflow: hidden; }
 .cat-sync .led { width: 9px; height: 9px; border-radius: 50%; background: var(--hero-text-faint); box-shadow: 0 0 0 1px rgba(0,0,0,0.5) inset; }
 .cat-sync[data-state="ok"] .led { background: var(--success); box-shadow: 0 0 6px var(--success); }
 .cat-sync[data-state="pending"] .led { background: var(--warning); box-shadow: 0 0 6px var(--warning); }
+.cat-sync[data-state="confirm-target"] .led { background: var(--warning); box-shadow: 0 0 6px var(--warning); }
+.cat-problem-list { margin: 0; padding-left: 18px; font-size: 12px; color: var(--hero-text-dim); max-height: 260px; overflow: auto; }
+.cat-problem-list li { margin-bottom: 6px; }
 .cat-sync[data-state="offline"] .led { background: var(--danger); box-shadow: 0 0 6px var(--danger); }
 .cat-sync[data-state="readonly"] .led { background: var(--info, #38bdf8); }
 .cat-btn-wide { width: 100%; }

@@ -46,7 +46,8 @@
     rowEls: new Map(),
     dialog: null,
     sync: null,
-    lastCanEdit: true
+    lastCanEdit: true,
+    promptedTarget: null
   };
 
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -618,6 +619,7 @@
     led.dataset.state = s.state;
     let text, title;
     if (s.state === 'unconfigured') { text = 'ในเครื่อง'; title = 'ข้อมูลเก็บในเครื่องนี้ (ยังไม่ได้ตั้งค่า Cloudflare) คลิกเพื่อตั้งค่า'; }
+    else if (s.state === 'confirm-target') { text = 'รอยืนยัน'; title = 'แคตตาล็อกบน Worker มีสินค้าอยู่แล้ว ' + (s.target ? s.target.itemCount : '') + ' ชิ้น คลิกเพื่อยืนยันการรวมข้อมูล'; }
     else if (s.state === 'ok') { text = 'ซิงก์แล้ว'; title = 'ซิงก์ล่าสุด ' + fmtTime(s.lastOkAt); }
     else if (s.state === 'pending') {
       text = s.writeBlocked ? 'token ไม่ถูกต้อง' : 'รอส่ง ' + s.pending;
@@ -628,6 +630,10 @@
     $('syncText').textContent = text;
     led.title = title; led.setAttribute('aria-label', 'สถานะซิงก์: ' + text);
     $('syncWarn').hidden = !s.warn;
+    const pc = s.problemCount || 0;
+    $('syncProblems').hidden = !pc;
+    if (pc) $('syncProblemsText').textContent = 'มี ' + pc + ' รายการที่ส่งขึ้น Worker ไม่สำเร็จ (สินค้ายังอยู่ในเครื่องนี้ครบ) กด "ดูรายละเอียด" เพื่อดูวิธีแก้';
+    if (s.state === 'confirm-target' && !S.dialog && S.promptedTarget !== (s.target && s.target.itemCount) + ':' + s.lastOkAt) { S.promptedTarget = (s.target && s.target.itemCount) + ':' + s.lastOkAt; confirmTargetDialog(); }
     // edit controls follow read-only mode
     const ro = readOnly();
     $('btnAdd').disabled = ro; $('btnAdd').title = ro ? READONLY_MSG : '';
@@ -635,6 +641,40 @@
     if (S.lastCanEdit !== !ro) { S.lastCanEdit = !ro; if (S.cfg) renderCard(); }
   }
   function setSyncStatus(s) { S.sync = s; renderSync(); }
+
+  function confirmTargetDialog() {
+    const n = S.sync && S.sync.target ? S.sync.target.itemCount : 0;
+    showDialog(
+      '<h2 id="dlgTitle">รวมสินค้าเข้ากับแคตตาล็อกบน Cloudflare</h2>' +
+      '<p>แคตตาล็อกนี้มีสินค้าอยู่แล้ว ' + n + ' ชิ้น จะรวมสินค้าในเครื่องเข้าไปไหม</p>' +
+      '<p>ถ้ารวม สินค้าที่มีในเครื่องนี้จะถูกส่งขึ้นไปรวมกับของเดิม (ไม่ลบของใครทิ้ง ถ้าแก้ชิ้นเดียวกัน ฉบับที่แก้ล่าสุดจะชนะ) ถ้าไม่ใช่คีย์ที่ตั้งใจ ให้กด "ยังไม่รวม" แล้วตรวจ Worker URL กับ Catalog Key ใน "ตั้งค่า Cloudflare"</p>' +
+      '<div class="cat-dlg-actions"><button type="button" class="cat-btn" id="tgNo" data-close>ยังไม่รวม</button>' +
+      '<button type="button" class="cat-btn cat-btn-primary" id="tgYes">รวมสินค้าเข้าด้วยกัน</button></div>',
+      (root) => {
+        root.querySelector('#tgYes').addEventListener('click', async () => {
+          const r = await api.confirmTarget();
+          closeDialog();
+          toast(r && r.ok ? 'กำลังรวมและซิงก์สินค้า' : 'ไม่มีรายการรอยืนยันแล้ว');
+        });
+      }
+    );
+  }
+
+  function problemsDialog() {
+    const list = (S.sync && S.sync.problems) || [];
+    const items = list.map((p) => {
+      const it = p.kind === 'item' ? S.items.get(p.id) : null;
+      const label = p.kind === 'item' ? (it ? labelOf(it) + (it.code ? ' (' + it.code + ')' : '') : 'สินค้า ' + p.id) : 'รูปสินค้า ' + String(p.id).slice(0, 8);
+      return '<li><b>' + esc(label) + '</b><br>' + esc(p.reason) + '</li>';
+    }).join('');
+    showDialog(
+      '<h2 id="dlgTitle">รายการที่ส่งขึ้น Worker ไม่สำเร็จ</h2>' +
+      '<p>ข้อมูลเหล่านี้ยังอยู่ในเครื่องนี้ครบ แต่เครื่องอื่นยังไม่เห็น</p><ul class="cat-problem-list">' + items + '</ul>' +
+      ((S.sync && S.sync.problemCount > list.length) ? '<p>และอีก ' + (S.sync.problemCount - list.length) + ' รายการ</p>' : '') +
+      '<div class="cat-dlg-actions"><button type="button" class="cat-btn" id="pbRetry">ลองส่งใหม่</button><button type="button" class="cat-btn cat-btn-primary" data-close>ปิด</button></div>',
+      (root) => { root.querySelector('#pbRetry').addEventListener('click', () => { api.syncNow(); closeDialog(); toast('กำลังลองส่งใหม่'); }); }
+    );
+  }
 
   function randomKey(n) {
     const abc = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -680,7 +720,7 @@
         const msg = (t, kind) => { const m = q('#cfMsg'); m.textContent = t; m.className = 'cat-conn-msg' + (kind ? ' ' + kind : ''); };
         const vals = () => ({ url: q('#cfUrl').value.trim().replace(/\/+$/, ''), key: q('#cfKey').value.trim() });
         function validate(v) {
-          if (!/^https?:\/\/[^\s/]+/i.test(v.url)) return 'Worker URL ไม่ถูกต้อง ต้องขึ้นต้นด้วย https:// (คัดลอกจากช่อง Database URL ของระบบรับเงินโอน)';
+          if (!(/^https:\/\/[^\s/]+/i.test(v.url) || /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(\/|$)/i.test(v.url))) return 'Worker URL ไม่ถูกต้อง ต้องขึ้นต้นด้วย https:// (ใช้ http:// ได้เฉพาะ localhost) คัดลอกจากช่อง Database URL ของระบบรับเงินโอน';
           if (!/^[A-Za-z0-9_-]{32,128}$/.test(v.key)) return 'Catalog Key ต้องยาว 32-128 ตัว ใช้ A-Z a-z 0-9 _ - เท่านั้น กด "สุ่มคีย์ใหม่" หรือวางคีย์จากเครื่องหลัก';
           return null;
         }
@@ -809,7 +849,8 @@
   $('btnDelMulti').addEventListener('click', () => { const ids = Array.from(S.picked); if (ids.length) confirmDelete(ids); });
   $('btnSettings').addEventListener('click', settingsDialog);
   $('btnCloud').addEventListener('click', cloudDialog);
-  $('syncLed').addEventListener('click', cloudDialog);
+  $('syncProblemsBtn').addEventListener('click', problemsDialog);
+  $('syncLed').addEventListener('click', () => { if (S.sync && S.sync.state === 'confirm-target') confirmTargetDialog(); else cloudDialog(); });
   $('syncWarnBtn').addEventListener('click', cloudDialog);
   $('hotkeyWarnBtn').addEventListener('click', settingsDialog);
   $('btnHide').addEventListener('click', () => api.hide());

@@ -12,6 +12,9 @@ const path = require('path');
 const BACKOFF_BASE_MS = 2000;
 const BACKOFF_MAX_MS = 5 * 60 * 1000;
 const WRITE_DEBOUNCE_MS = 200;
+// After this many failed tries an entry counts as "permanently failing": a failing image stops
+// blocking its items, and a network-change retry no longer resets its backoff.
+const PERMANENT_TRIES = 5;
 
 function backoffMs(tries) {
   if (!(tries > 0)) return 0;
@@ -33,6 +36,8 @@ function createOutbox(dir, opts = {}) {
   const entries = new Map(); // key -> entry (insertion ordered)
   let timer = null;
   let dirty = false;
+  let retryTimer = null;
+  let retryMs = opts.retryMs || 1000;
 
   function load() {
     entries.clear();
@@ -69,9 +74,15 @@ function createOutbox(dir, opts = {}) {
       fs.writeFileSync(tmp, JSON.stringify(Array.from(entries.values())));
       fs.renameSync(tmp, file);
       dirty = false;
+      retryMs = opts.retryMs || 1000;
       return true;
     } catch (e) {
       console.warn('[catalog] outbox.json write failed:', e.message);
+      if (!retryTimer) { // transient (antivirus, sharing violation): retry with backoff, entries stay in memory
+        retryTimer = setTimeout(() => { retryTimer = null; flush(); }, retryMs);
+        if (retryTimer.unref) retryTimer.unref();
+        retryMs = Math.min(30000, retryMs * 2);
+      }
       return false;
     }
   }
@@ -92,9 +103,9 @@ function createOutbox(dir, opts = {}) {
   const enqueueImage = (hash, variant, ver) => enqueue('img', { hash, variant, ver: variant === 'orig' ? null : (ver == null ? null : ver) });
 
   // Entries that may be sent right now: images first, then meta, then items whose image is uploaded.
-  function ready(at = clock()) {
+  function ready(at = clock(), maxImgTries = PERMANENT_TRIES) {
     const pendingImgHashes = new Set();
-    for (const e of entries.values()) if (e.op === 'img') pendingImgHashes.add(e.payload.hash);
+    for (const e of entries.values()) if (e.op === 'img' && e.tries < maxImgTries) pendingImgHashes.add(e.payload.hash);
     const imgs = [], metas = [], items = [];
     for (const e of entries.values()) {
       if (e.nextAt > at) continue;
@@ -141,9 +152,13 @@ function createOutbox(dir, opts = {}) {
   }
 
   // Retry everything immediately (manual "sync now", network came back).
-  function resetBackoff() {
+  // soft: leave permanently failing entries (tries >= PERMANENT_TRIES) alone (network-change retries).
+  function resetBackoff(o = {}) {
     let n = 0;
-    for (const e of entries.values()) if (e.nextAt || e.tries) { e.nextAt = 0; e.tries = 0; n++; }
+    for (const e of entries.values()) {
+      if (o.soft && e.tries >= PERMANENT_TRIES) continue;
+      if (e.nextAt || e.tries) { e.nextAt = 0; e.tries = 0; n++; }
+    }
     if (n) scheduleWrite();
   }
 
@@ -162,4 +177,4 @@ function createOutbox(dir, opts = {}) {
   return api;
 }
 
-module.exports = { createOutbox, backoffMs, keyOf, BACKOFF_BASE_MS, BACKOFF_MAX_MS };
+module.exports = { createOutbox, backoffMs, keyOf, PERMANENT_TRIES, BACKOFF_BASE_MS, BACKOFF_MAX_MS };

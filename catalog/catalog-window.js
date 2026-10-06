@@ -7,7 +7,7 @@ const { BrowserWindow, screen, globalShortcut, Notification } = require('electro
 const PRELOAD = path.join(__dirname, '..', 'preload-catalog.js');
 const PAGE = path.join(__dirname, '..', 'renderer', 'catalog', 'index.html');
 
-function createCatalogWindow({ getMainWindow, configStore, onVisibility }) {
+function createCatalogWindow({ getMainWindow, configStore, onVisibility, onFocus }) {
   let win = null;
   let ready = false;
   let quitting = false;
@@ -81,6 +81,8 @@ function createCatalogWindow({ getMainWindow, configStore, onVisibility }) {
 
   const notifyVis = (v) => { try { if (onVisibility) onVisibility(v); } catch (e) { console.warn('[catalog] visibility cb', e.message); } };
 
+  const notifyFocus = (f) => { try { if (onFocus) onFocus(f); } catch (e) { console.warn('[catalog] focus cb', e.message); } };
+
   function create() {
     const c = cfg().window;
     const b = computeInitialBounds();
@@ -113,6 +115,8 @@ function createCatalogWindow({ getMainWindow, configStore, onVisibility }) {
     win.on('move', saveBoundsSoon);
     win.on('show', sendFocusSearch);
     win.on('show', () => notifyVis(true));
+    win.on('focus', () => notifyFocus(true));
+    win.on('blur', () => notifyFocus(false));
     win.on('hide', () => notifyVis(false));
     win.on('minimize', () => notifyVis(false));
     win.on('restore', () => notifyVis(true));
@@ -222,6 +226,7 @@ function createCatalogWindow({ getMainWindow, configStore, onVisibility }) {
   return {
     show, hide, toggle, togglePin, setTheme, send, initHotkey, registerHotkey, dispose,
     getPinState: () => pinned,
+    isFocused: () => !!(win && !win.isDestroyed() && win.isFocused()),
     isVisible: () => !!(win && !win.isDestroyed() && win.isVisible() && !win.isMinimized()),
     getHotkey: () => ({ accelerator: activeKey || cfg().window.hotkey, active: !!activeKey, error: lastError }),
     getWindow: () => (win && !win.isDestroyed() ? win : null),

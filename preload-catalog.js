@@ -34,5 +34,6 @@ contextBridge.exposeInMainWorld('catalogAPI', {
   testConnection: (cfg) => inv('testConnection', cfg),
   initWorker: () => inv('initWorker'),
   syncNow: () => inv('syncNow'),
+  confirmTarget: () => inv('confirmTarget'),
   setWriteToken: (token) => inv('set-write-token', token)
 });

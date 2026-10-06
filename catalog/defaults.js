@@ -5,7 +5,9 @@
 const defaults = {
   worker: {
     url: '', key: '', writeToken: '', pollMsVisible: 5000, pollMsHidden: 60000,
-    requestTimeoutMs: 20000, imageTimeoutMs: 60000, batchSize: 200, warnAfterMs: 180000
+    pollMsUnfocused: 15000, pollBackoffMaxMs: 60000,
+    requestTimeoutMs: 20000, imageTimeoutMs: 60000, batchSize: 200, warnAfterMs: 180000,
+    maxConcurrentDownloads: 4, maxImageBytes: 5 * 1024 * 1024
   },
   window: {
     hotkey: 'F2', width: 920, height: 752, minWidth: 640, minHeight: 520,
