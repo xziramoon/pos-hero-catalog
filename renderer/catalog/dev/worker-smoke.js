@@ -5,7 +5,7 @@
   window.addEventListener('securitypolicyviolation', function (e) { console.log('SMOKE_CSP:' + e.violatedDirective + ' ' + e.blockedURI); });
   var c = document.getElementById('c'), g = c.getContext('2d');
   g.fillStyle = '#d0ccc0'; g.fillRect(0, 0, 800, 600);
-  g.fillStyle = '#c04060'; g.fillRect(300, 120, 200, 380);
+  g.fillStyle = '#40a0e0'; g.fillRect(300, 120, 200, 380);
   c.toBlob(function (blob) {
     var w;
     try { w = new Worker('../image/image-worker.js'); } catch (e) { return report({ ok: false, stage: 'new Worker', error: String(e) }); }

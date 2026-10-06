@@ -108,6 +108,14 @@ Full API, crop definition and coordinate spaces are documented in the header com
   (size = `info.analyzeW x info.analyzeH`). `thumbCrop/fullCrop {x,y,z}`: z = zoom vs the default 86% fit,
   x/y = pan of the content centre in tile px at 512 reference scale (+x right, +y down).
 - `quality` reasons: `too_small`(retake), `mask_area_low|mask_area_high|touches_edges|mask_broken|dark|tilt_too_large`(check).
+- **CSP verified in real Electron** (Electron 32 / Chromium, sandboxed hidden window, `npm run smoke:pipeline`,
+  harness `test/electron/pipeline-smoke/main.js` + `renderer/catalog/dev/worker-smoke.{html,js}`, excluded from the
+  build): the worker + OpenCV.js (embind `new Function`) run under EXACTLY the CSP above, `script-src 'self'
+  'wasm-unsafe-eval'`, with no EvalError and no CSP violation events. A file:// classic worker does not inherit the
+  document CSP, so **no `'unsafe-eval'` is needed; final decision = keep the CSP unchanged.** Re-run the smoke test
+  if the CSP, Electron version or opencv.js changes (never run `electron .`: it registers autostart).
+- Worker cache: keyed by sourceId + content fingerprint + cfg.origMax; data-carrying requests that get coalesced
+  or cancelled still populate it; previews are coalesced only per sourceId; preview's analyze size equals final's.
 - TODO(Phase 3b): `image/pipeline/defaults-image.js` duplicates spec §11 `image` defaults (the worker
   cannot require main-process `catalog/defaults.js`). Dedupe: have the renderer pass `config.image` as
   `cfg` on every worker message (already supported) and delete the copy.
