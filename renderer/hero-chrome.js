@@ -185,6 +185,18 @@
                 heroExitMini();
             }
         }
+        // Catalog button: keep its pointer events away from the HUD's
+        // drag/click-to-expand handlers entirely.
+        var bagBtn = document.getElementById('miniBagBtn');
+        if (bagBtn) {
+            ['pointerdown', 'pointerup', 'mousedown', 'mouseup'].forEach(function (t) {
+                bagBtn.addEventListener(t, function (e) { e.stopPropagation(); });
+            });
+            bagBtn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                if (window.heroWindow && window.heroWindow.toggleCatalog) window.heroWindow.toggleCatalog();
+            });
+        }
         hud.addEventListener('pointerup', endDrag);
         hud.addEventListener('pointercancel', endDrag);
     })();
