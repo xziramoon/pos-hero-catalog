@@ -17,6 +17,7 @@ const { createSync } = require('./catalog-sync');
 const migrate = require('./catalog-migrate');
 const { createBackup } = require('./catalog-backup');
 const { createCatalogWindow } = require('./catalog-window');
+const { createLock } = require('./catalog-lock');
 const { sanitizeItemInput, sanitizeMetaPatch, sanitizeConfigPatch, sanitizeWriteToken } = require('./sanitize');
 
 let inited = false;
@@ -30,6 +31,7 @@ let sync = null;
 let backup = null;
 let dataDir = null;
 let appRef = null;
+let lock = null;
 const legacyAllowed = new Set(); // legacy files the renderer may import (auto-detected or picked in the open dialog)
 let importState = { running: false };
 
@@ -260,6 +262,12 @@ function init(opts) {
     const { app, getMainWindow, userDataDir, config } = opts;
     const dir = process.env.CATALOG_DATA_DIR || path.join(userDataDir, 'catalog');
     fs.mkdirSync(dir, { recursive: true });
+    lock = createLock(dir);
+    if (!lock.acquire()) {
+      console.warn('[catalog] another POS Hero process (pid', lock.owner(), ') owns', dir, '- catalog disabled in this one');
+      return;
+    }
+    app.on('before-quit', () => shutdown()); // flush + release the lock even if init fails below
     dataDir = dir;
     appRef = app;
     imagesDir = path.join(dir, 'images');
@@ -290,7 +298,6 @@ function init(opts) {
     sync.start({ watchNetwork: true }); // also listens for network interface changes (hotspot switch)
     cwin.initHotkey();
     backup.startDaily();
-    app.on('before-quit', () => shutdown());
     inited = true;
     console.log('[catalog] ready, dir =', dir, ', items =', store.list().length);
     devHooks();
@@ -334,6 +341,7 @@ function shutdown() {
   try { if (sync) sync.stop(); } catch (e) { console.warn('[catalog] sync stop failed', e.message); }
   try { if (outbox) outbox.flush(); } catch (e) { console.warn('[catalog] outbox flush failed', e.message); }
   try { if (store) store.flush(); } catch (e) { console.warn('[catalog] flush failed', e.message); }
+  try { if (lock) lock.release(); } catch (e) { console.warn('[catalog] unlock failed', e.message); }
 }
 
 module.exports = { registerSchemes, init, openCatalog, toggleCatalog, shutdown };

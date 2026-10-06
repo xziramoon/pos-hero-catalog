@@ -803,6 +803,7 @@
         text-overflow: ellipsis;
     }
     .mini-sub {
+        padding-right: 22px; /* room for the 👜 .mini-bag-btn at bottom-right */
         font-size: 10px;
         color: var(--hero-text-dim);
         white-space: nowrap;

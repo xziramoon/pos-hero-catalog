@@ -552,7 +552,6 @@ ipcMain.handle('print:raw', async (_event, arg) => {
 
 app.on('before-quit', () => {
   isQuitting = true;
-  try { if (catalog) catalog.shutdown(); } catch (e) { /* ignore */ }
 });
 
 ipcMain.on('window:minimize', () => {
