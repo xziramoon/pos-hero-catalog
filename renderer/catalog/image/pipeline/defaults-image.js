@@ -1,12 +1,11 @@
 /**
  * Catalog image pipeline defaults.
  *
- * COPY of spec §11 `image` config. The authoritative copy lives in the main
- * process `catalog/defaults.js`; it is duplicated here so the Web Worker (which
- * cannot require main-process code) works standalone.
- * TODO(Phase 3b): dedupe — have the renderer pass `config.image` into the worker
- * on every message (the worker already accepts `cfg` per message) and drop this
- * file, or generate it from catalog/defaults.js at build time.
+ * FALLBACK copy of spec §11 `image` config. The authoritative copy is the main-process
+ * `catalog/defaults.js` (merged with config.json); the renderer passes the effective
+ * `getConfig().image` as `cfg` on every worker message (Phase 3b), so these values only apply
+ * when a caller omits keys (tests, the CLI tools, the CSP smoke page).
+ * test/image-save.test.js fails if this copy drifts from catalog/defaults.js.
  *
  * `thresholds` holds the few constants spec §8.2/§8.3 give as literals rather
  * than as config keys (kept out of `image` so that object matches §11 exactly).

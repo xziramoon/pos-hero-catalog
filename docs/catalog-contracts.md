@@ -116,9 +116,8 @@ Full API, crop definition and coordinate spaces are documented in the header com
   if the CSP, Electron version or opencv.js changes (never run `electron .`: it registers autostart).
 - Worker cache: keyed by sourceId + content fingerprint + cfg.origMax; data-carrying requests that get coalesced
   or cancelled still populate it; previews are coalesced only per sourceId; preview's analyze size equals final's.
-- TODO(Phase 3b): `image/pipeline/defaults-image.js` duplicates spec §11 `image` defaults (the worker
-  cannot require main-process `catalog/defaults.js`). Dedupe: have the renderer pass `config.image` as
-  `cfg` on every worker message (already supported) and delete the copy.
+- Image config dedupe (done in 3b): the renderer passes `getConfig().image` as `cfg` on every worker message; `image/pipeline/defaults-image.js`
+  stays only as the fallback for callers that omit keys (a unit test keeps it equal to `catalog/defaults.js`).
 - Also required in renderer HTML: nothing beyond the CSP above; the worker is a classic worker
   (`new Worker('image/image-worker.js')`), `worker-src 'self' blob:` is enough.
 `renderer/catalog/index.html` links `../theme-hero.css` (and `../base.css` only if needed) and `../assets/fonts/*`.
@@ -217,3 +216,24 @@ Error JSON shape: `{ error: "code", message: "..." }`. Clock-skew reject: HTTP 4
   (+ pushes/images, a few hundred). Worst case, 4 machines focused 24 h = 69k/day. Cloudflare's free quota is, to our knowledge, 100k requests/day each for Workers and Durable Objects; re-check the dashboard. Inbox adds about 290/day.
   Note: a catalog window that stays visible but unfocused next to the POS syncs every 15 s, so edits can take up to ~15 s to show there (they appear immediately when it is focused).
 - Tests: `test/sync-safety.test.js` (fake Worker in `test/fake-worker.js`) covers each item above; `test/sync.e2e.test.js` now expects the wiped-server case to keep and re-push local-only items.
+
+## Phase 3b notes (photo editor + image wiring) — additions and deviations
+- Files: `renderer/catalog/photo-editor.js` (editor + the shared worker client; global `CatalogPhotoEditor`: `processFile(blob,cfg)`,
+  `open({title,source:{blob,isOrig},edit,shortName,cfg,onDone})`, `toPayload(result,{includeOrig})`, `isOpen()`), CSS block `pe-*` / `imgf*` in `catalog.css`,
+  main `catalog/catalog-image-save.js` (pure Node, tested by `test/image-save.test.js`), pixel icons added to `icons.js`.
+- New IPC (catalog window only): `saveImage(itemId, {orig?, thumb, full, hash, edit, quality, w, h}) -> Item` and `readOrig(hash) -> ArrayBuffer|null`
+  (downloads the orig from R2 through `sync.ensureImage` when it is not local). `saveImage` is the ONLY path that sets `Item.image`
+  (`sanitizeItemInput` still forbids it). Main verifies: item exists and is not deleted, write allowed (read-only refuses), every variant is a JPEG <= 5 MB,
+  `hash == sha256(orig bytes)` (or the orig is already stored when `orig` is omitted; the renderer omits it when re-editing the same hash),
+  quality enum, w/h 1..8192, and whitelists/clamps `edit` (`sanitizeEdit`: strokes <= 300, points <= 4000 each).
+  Order: `images.saveVariants` (emits `saved` -> img uploads queued) THEN `store.put`.
+- `ver` is `max(highest thumb-v/full-v file in images/{hash}/, item's ver when the hash is unchanged) + 1`, so two items sharing one orig hash never
+  overwrite each other's versioned files. A new item from the add dialog is created first (`save`), then `saveImage` attaches the image: the outbox keeps one
+  entry per item id, so the item op may sit ahead of the img ops in `outbox.json`; sync still uploads images first and holds the item back until they are sent.
+- Worker addition (preview only): `debug:true` also returns `analyzeMask {width,height,buffer}` (0/255 at analyze size, absent when there is no cut-out). Used by the brush view.
+- Editor preview geometry: previews are rendered 500x500 and the real tile is the inner 80% (frame); crops are sent as `(x*0.8, y*0.8, z*0.8)` so the ring around the frame
+  shows the product beyond the tile. Saved `edit.thumbCrop/fullCrop` are the real (unscaled) values. The brush view shows the manually rotated analyze image
+  (not the tile), so strokes are stored in the documented analyze space; any rotation change clears the strokes.
+- Harness (`npm run harness:catalog`, `test/electron/catalog-harness/main.js`, excluded from the build): standalone Electron entry that never loads `main.js`
+  (no autostart). Env: `CATALOG_HARNESS_DIR, HARNESS_SEED, HARNESS_FIXTURES, HARNESS_JS, HARNESS_STEPS, HARNESS_SHOT, HARNESS_KEEP, HARNESS_CONFIG, HARNESS_VERBOSE, HARNESS_TIMEOUT_MS`.
+  Never run `electron .`; `ELECTRON_RUN_AS_NODE` must be unset.

@@ -31,6 +31,7 @@
  *              orig blob/hash are the unchanged input bytes (hash stays stable on re-process).
  *   cfg        spec section 11 `image` config (missing keys -> pipeline defaults)
  *   edit       spec section 8.4 `image.edit` (missing keys -> defaults)
+ *   debug      preview only: also return `analyzeMask {width,height,buffer}` (0/255, analyze size; absent without a cut-out)
  *   variants / sizes   optional overrides forwarded to runPipeline (preview only: {thumb,full} px)
  *
  * RESPONSE (process)
@@ -186,9 +187,13 @@ importScripts(
     var src = await getSource(msg, cfg);
     // Same input as `process` (the orig-size RGBA): the pipeline's own analyzeResize then yields exactly
     // the same analyze image / size as final, so brush coordinates and info.analyzeW/H match.
-    var r = P.runPipeline(cv, rgbaOf(src), cfg, msg.edit, { mode: 'preview', variants: msg.variants, sizes: msg.sizes });
+    var r = P.runPipeline(cv, rgbaOf(src), cfg, msg.edit, { mode: 'preview', variants: msg.variants, sizes: msg.sizes, debug: !!msg.debug });
     var out = { id: msg.id, ok: true, type: 'preview', quality: r.quality, reasons: r.reasons, w: src.w, h: src.h, edit: r.edit, info: r.info };
     var transfer = [];
+    if (msg.debug && r.debug && r.debug.analyzeMask) { // brush overlay: 0/255 mask at analyze size
+      out.analyzeMask = { width: r.info.analyzeW, height: r.info.analyzeH, buffer: r.debug.analyzeMask.buffer };
+      transfer.push(r.debug.analyzeMask.buffer);
+    }
     Object.keys(r.tiles).forEach(function (k) {
       var t = r.tiles[k];
       out[k] = { width: t.width, height: t.height, buffer: t.data.buffer };
