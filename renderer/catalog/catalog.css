@@ -351,3 +351,17 @@ kbd {
 .cat-tips ul { margin: 6px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 2px; }
 
 }
+
+/* batch jobs (legacy import, re-process all, backup) */
+.cat-bar { height: 14px; background: var(--hero-panel-3); border: 2px solid; border-color: var(--hero-border-dk) var(--hero-border-lt) var(--hero-border-lt) var(--hero-border-dk); border-radius: 2px; overflow: hidden; }
+.cat-bar > i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--hero-active-1), var(--hero-active-2)); transition: width 0.15s linear; }
+.cat-job-text { font-size: 13px; color: var(--hero-text); min-height: 18px; }
+.cat-job-sub { font-size: 12px; color: var(--hero-text-dim); min-height: 16px; }
+.cat-stats { display: grid; grid-template-columns: 1fr auto; gap: 2px 14px; font-size: 13px; color: var(--hero-text-dim); padding: 8px 10px; background: var(--hero-panel-2); border: 1px solid var(--hero-border-dk); border-radius: 2px; }
+.cat-stats b { color: var(--hero-text); text-align: right; font-variant-numeric: tabular-nums; }
+.cat-stats .ok b { color: var(--success); } .cat-stats .check b { color: var(--warning); } .cat-stats .retake b, .cat-stats .bad b { color: var(--danger); }
+.cat-stats .sec { grid-column: 1 / -1; color: var(--hero-gold-bright); font-weight: 700; margin-top: 4px; }
+.cat-filelist { display: flex; flex-direction: column; gap: 4px; max-height: 150px; overflow: auto; }
+.cat-filelist label { display: flex; gap: 8px; align-items: flex-start; padding: 6px 8px; font-size: 12px; color: var(--hero-text-dim); background: var(--hero-panel-2); border: 1px solid var(--hero-border-dk); border-radius: 2px; cursor: pointer; word-break: break-all; }
+.cat-filelist label:has(input:checked) { border-color: var(--hero-gold-bright); color: var(--hero-text); }
+.cat-check { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--hero-text-dim); }

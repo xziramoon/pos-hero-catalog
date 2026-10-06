@@ -36,6 +36,21 @@ contextBridge.exposeInMainWorld('catalogAPI', {
   syncNow: () => inv('syncNow'),
   confirmTarget: () => inv('confirmTarget'),
   setWriteToken: (token) => inv('set-write-token', token),
+  // Phase 5 (legacy import, backups)
+  findLegacy: () => inv('findLegacy'),
+  pickLegacyFile: () => inv('pickLegacyFile'),
+  previewLegacy: (file) => inv('previewLegacy', file),
+  importLegacy: (file) => inv('importLegacy', file),
+  onImportProgress: (cb) => sub('import-progress', cb),
+  readImportImage: async (name) => {
+    const b = await inv('readImportImage', name);
+    if (!b) return null;
+    if (b instanceof ArrayBuffer) return b;
+    return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength);
+  },
+  finishImport: () => inv('finishImport'),
+  backupNow: (reason) => inv('backupNow', reason),
+  exportJson: (source) => inv('exportJson', source),
   // Phase 3b (photo editor)
   saveImage: (itemId, payload) => inv('saveImage', itemId, payload),
   readOrig: async (hash) => {
