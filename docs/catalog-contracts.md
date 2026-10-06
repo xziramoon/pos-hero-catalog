@@ -266,3 +266,21 @@ Error JSON shape: `{ error: "code", message: "..." }`. Clock-skew reject: HTTP 4
 - Harness run (30 legacy items, 22 with images, 1 corrupt): import -> 30 added, 22 images saved (10 ok / 4 check / 8 retake; synthetic fixtures), 6 favorites, 6 categories, codes `00100` kept; re-import -> 0 added / 0 updated / 30 skipped, still 30 items,
   legacy file sha unchanged; "จัดรูปทั้งหมด" over the 22 images -> 14 ok / 4 check / 4 retake (re-processing from the stored orig re-encodes slightly differently, so a few quality verdicts differ from the first pass).
 - Known gaps: edit-lock UI; no progress event for the image phase from main (the renderer drives it); an import of tens of thousands of images runs sequentially (about 1 s per image) and the window must stay open.
+
+## Phase 6 notes (finishing) — additions and deviations
+- **IPC** (append-only): `removeImage(itemId) -> Item | {error}` (sets `image = null`, respects read-only, files stay on disk/R2; the only path besides `saveImage` that touches `Item.image`),
+  `hasOrig(hash) -> boolean`, `restoreBackup() -> {ok, restored, added, updated, undeleted, skipped, backup?, error?, canceled?}` (open-file dialog in `backups/`).
+  **`saveImage` now returns `Item | {error: <Thai message>}`** instead of throwing/`null` (`catalog-image-save.js` `thaiSaveError`); the renderer shows the message. The `guarded()` fallback is `{error}` too.
+- Always-send-orig: the renderer sends the orig bytes unless `hasOrig(hash)` confirms main already has them (a synced item whose orig was never downloaded no longer fails with "orig is missing").
+- `ver` for `saveImage` = max(highest `thumb-v/full-v` file for the hash, `ver` of ANY item (incl. tombstones) referencing the hash, own `ver`) + 1.
+  **Residual risk:** two devices that edit two different items sharing one orig hash while both offline can still mint the same `ver` (the last item to sync overwrites `thumb-vN`/`full-vN` in R2 for the other). Rare (needs identical orig bytes on two items), accepted.
+- Origs downloaded from R2 (`sync.ensureImage(hash,'orig')`, hence `readOrig` and `catimg://`) are verified against `sha256 == hash` before being stored; a mismatch is discarded (nothing written) and treated as "not available".
+- First pass == reprocess: `image-worker.js` encodes the orig first and runs the pipeline on the DECODED orig JPEG (`settle`), so `process(file)` and `process(storedOrig, isOrig)` give identical hash, quality, reasons and tiles.
+  `too_small` is measured on the orig-size image (<= 2048 px, long side of the product / `ppo`) as spec section 8.3 says; legacy <= 500 px images legitimately give `retake`.
+  Test: `HARNESS_FIXTURES=1 HARNESS_STEPS=test/electron/catalog-harness/steps/consistency.js npm run harness:catalog` (needs Electron, not part of `npm test`). Visual walkthrough: `steps/walkthrough.js`.
+- Editor caps brush strokes at the same limits as main (300 strokes, 4000 points each, `MAX_STROKES/MAX_PTS` exported from `catalog-image-save.js`) with a Thai hint.
+- Skill bar: `เลือกหลายชิ้น` + `เมนู` (dropdown: ตั้งค่า, ตั้งค่า Cloudflare, นำเข้าจาก Catalog Hero, จัดรูปทั้งหมด; `aria-haspopup/aria-expanded`, arrows/Home/End/Esc) + `สำรองข้อมูล` + hotkey hint; one line down to 640 px. Button ids are unchanged.
+- Restore: `catalog-backup.js restoreFrom(file)` re-applies a backup's items as NEW local edits (fresh `updatedAt`, un-deletes tombstones, unions categories) after a `before-restore` backup; copying a file over `db.json` is NOT supported (old `lastRev`/`synced`, stale outbox, newer server copies would win).
+- Build: `package.json build.files` additionally excludes `renderer/catalog/image/tools/**` and `catalog/tools/**` (dev scripts; nothing at runtime requires them). Runtime set = `main.js, preload.js, preload-catalog.js, catalog/**, renderer/** (incl. catalog/vendor/opencv.js, image/pipeline, image-worker.js)`, minus `renderer/catalog/dev/**`; `test/`, `cloudflare-inbox/`, `docs/` are not listed so not packaged.
+- User manual: `docs/catalog.md` (Thai).
+- Theme check: `catalog.css` hardcoded colours remaining are intentional: cream `--tile-bg`, toast/COPIED greens (spec 7.6), `#fff` on active/alert gradients, brush overlay greens/reds and the neutral `#2a2a2a` brush backdrop (they must read on any photo). The skill bar's former `#150e28` was replaced by `var(--hero-panel-3)`.
