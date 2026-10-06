@@ -126,7 +126,9 @@ importScripts(
     var old = cache;
     cache = {
       sourceId: msg.sourceId, fp: fp, origMax: cfg.origMax, isOrig: isOrig, source: source, canvas: canvas, w: w, h: h,
-      rgba: null, origBlob: (isOrig && s === 1 && source.blob) ? source.blob : null, hash: null
+      rgba: null, origBlob: (isOrig && s === 1 && source.blob) ? source.blob : null, hash: null,
+      // true once `canvas` holds the pixels of the stored orig bytes (an input that already IS the orig needs no re-decode)
+      settled: !!(isOrig && s === 1 && source.blob)
     };
     if (old && old.source !== source && old.source.bitmap && old.source.bitmap.close) old.source.bitmap.close();
     return cache;
@@ -153,6 +155,15 @@ importScripts(
   async function ensureOrig(src, cfg) {
     if (!src.origBlob) src.origBlob = await src.canvas.convertToBlob({ type: 'image/jpeg', quality: Math.max(ORIG_JPEG_Q, cfg.jpegQuality || 0) });
     if (!src.hash) src.hash = hex(await crypto.subtle.digest('SHA-256', await src.origBlob.arrayBuffer()));
+    // First pass == reprocess: analyse the exact (JPEG re-encoded) orig bytes that get stored, not the raw decoded
+    // file, so process(file) and process(storedOrig, isOrig) give the same quality verdict.
+    if (!src.settled) {
+      var bmp = await createImageBitmap(src.origBlob);
+      var c = new OffscreenCanvas(src.w, src.h), g = c.getContext('2d');
+      g.drawImage(bmp, 0, 0, src.w, src.h);
+      if (bmp.close) bmp.close();
+      src.canvas = c; src.rgba = null; src.settled = true;
+    }
     return src;
   }
 
@@ -172,9 +183,8 @@ importScripts(
 
   async function doProcess(msg) {
     var cfg = P.mergeImageCfg(msg.cfg);
-    var src = await getSource(msg, cfg);
+    var src = await ensureOrig(await getSource(msg, cfg), cfg);
     var r = P.runPipeline(cv, rgbaOf(src), cfg, msg.edit, { mode: 'final', variants: msg.variants, sizes: msg.sizes });
-    await ensureOrig(src, cfg);
     var thumb = await tileToBlob(r.tiles.thumb, cfg.jpegQuality), full = await tileToBlob(r.tiles.full, cfg.jpegQuality);
     return {
       id: msg.id, ok: true, type: 'process', thumb: thumb, full: full, orig: src.origBlob, hash: src.hash,
@@ -184,7 +194,7 @@ importScripts(
 
   async function doPreview(msg) {
     var cfg = P.mergeImageCfg(msg.cfg);
-    var src = await getSource(msg, cfg);
+    var src = await ensureOrig(await getSource(msg, cfg), cfg);
     // Same input as `process` (the orig-size RGBA): the pipeline's own analyzeResize then yields exactly
     // the same analyze image / size as final, so brush coordinates and info.analyzeW/H match.
     var r = P.runPipeline(cv, rgbaOf(src), cfg, msg.edit, { mode: 'preview', variants: msg.variants, sizes: msg.sizes, debug: !!msg.debug });
