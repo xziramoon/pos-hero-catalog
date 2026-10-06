@@ -409,6 +409,7 @@
             document.documentElement.setAttribute('data-theme', name);
         }
         try { localStorage.setItem('heroTheme', name); } catch (e) {}
+        try { window.heroWindow && window.heroWindow.notifyTheme && window.heroWindow.notifyTheme(name); } catch (e) {}
         markActiveSwatch();
         pushBackgroundColor();
     };

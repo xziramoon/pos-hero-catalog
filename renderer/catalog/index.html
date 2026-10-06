@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob: catimg:; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self' https:">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>กระเป๋าสินค้า · Catalog Hero</title>
+<link rel="stylesheet" href="../theme-hero.css">
+<link rel="stylesheet" href="catalog.css">
+</head>
+<body class="cat-body">
+<div class="cat-app" id="app">
+
+  <!-- titlebar (drag region) -->
+  <div class="hero-titlebar">
+    <div class="hero-titlebar-drag">
+      <span class="cat-bag" data-icon="bag" data-size="16"></span>
+      <span class="hero-title-text">CATALOG HERO</span>
+      <span class="hero-subtitle">INVENTORY · กระเป๋าสินค้า</span>
+      <span class="cat-local-tag" title="ข้อมูลเก็บในเครื่องนี้ (ยังไม่ซิงก์)">ในเครื่อง</span>
+    </div>
+    <div class="hero-titlebar-btns">
+      <button class="hero-tbtn" id="btnPin" type="button" title="ปักหมุดลอยบนสุด" aria-label="ปักหมุดลอยบนสุด"><span data-icon="pin" data-size="12"></span></button>
+      <button class="hero-tbtn" id="btnHide" type="button" title="ซ่อน (Esc)" aria-label="ซ่อนหน้าต่าง"><span data-icon="minus" data-size="12"></span></button>
+      <button class="hero-tbtn hero-tbtn-close" id="btnClose" type="button" title="ปิด (ซ่อนไว้ ไม่ได้ออกจากโปรแกรม)" aria-label="ปิดหน้าต่าง"><span data-icon="close" data-size="12"></span></button>
+    </div>
+  </div>
+
+  <div class="cat-warnbar" id="hotkeyWarn" hidden>
+    <span id="hotkeyWarnText"></span>
+    <button class="cat-btn cat-btn-sm" id="hotkeyWarnBtn" type="button">เลือกปุ่มใหม่</button>
+  </div>
+
+  <main class="cat-paper">
+    <div class="hero-rank-strip cat-quest">
+      <span class="hero-rank-badge">กระเป๋าสินค้า</span>
+      <span class="hero-rank-sub">คลิก = คัดลอกรหัส · คลิกขวา = แก้ไข · Enter = คัดลอก · ลูกศร = เลื่อน</span>
+    </div>
+
+    <div class="cat-searchrow">
+      <label class="cat-search">
+        <span class="cat-search-ico" data-icon="search" data-size="14"></span>
+        <input id="search" type="text" autocomplete="off" spellcheck="false" placeholder="ค้นหาชื่อ / รหัส / ยิงบาร์โค้ด" aria-label="ค้นหาสินค้า หรือยิงบาร์โค้ด">
+        <span class="cat-scan"><span data-icon="scan" data-size="12"></span>SCAN</span>
+      </label>
+      <button class="cat-btn cat-btn-primary" id="btnAdd" type="button"><span data-icon="plus" data-size="12"></span>เพิ่มสินค้า</button>
+    </div>
+
+    <div class="cat-tabsrow">
+      <div class="cat-tabs" id="tabs" role="tablist" aria-label="หมวดสินค้า"></div>
+      <div class="cat-count" id="count" aria-live="polite"></div>
+    </div>
+
+    <div class="cat-content">
+      <section class="cat-gridpanel" aria-label="รายการสินค้า">
+        <div class="cat-gridscroll" id="gridScroll">
+          <div class="cat-sizer" id="gridSizer"><div class="cat-rows" id="gridRows" role="group" aria-label="ช่องสินค้า"></div></div>
+          <div class="cat-empty" id="emptyMsg" hidden></div>
+        </div>
+      </section>
+
+      <aside class="cat-card" id="card" aria-label="รายละเอียดสินค้า"></aside>
+    </div>
+
+    <div class="cat-skillbar">
+      <button class="cat-btn" id="btnMulti" type="button" aria-pressed="false"><span data-icon="select" data-size="12"></span>เลือกหลายชิ้น</button>
+      <span class="cat-multi-actions" id="multiActions" hidden>
+        <span class="cat-multi-n" id="multiN"></span>
+        <button class="cat-btn" id="btnMoveCat" type="button"><span data-icon="folder" data-size="12"></span>ย้ายหมวด</button>
+        <button class="cat-btn" id="btnFavMulti" type="button"><span data-icon="star" data-size="12"></span>ปักดาว</button>
+        <button class="cat-btn cat-btn-danger" id="btnDelMulti" type="button"><span data-icon="trash" data-size="12"></span>ลบ</button>
+      </span>
+      <button class="cat-btn" id="btnSettings" type="button"><span data-icon="gear" data-size="12"></span>ตั้งค่า</button>
+      <span class="cat-skill-spacer"></span>
+      <span class="cat-hotkey-hint">ปิด/เปิด <kbd id="hotkeyLabel">F2</kbd></span>
+    </div>
+  </main>
+
+  <div class="cat-toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <div class="cat-dlg-root" id="dlgRoot" hidden></div>
+</div>
+
+<script src="icons.js"></script>
+<script src="filters.js"></script>
+<script src="catalog-app.js"></script>
+</body>
+</html>

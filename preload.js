@@ -4,6 +4,8 @@ contextBridge.exposeInMainWorld('heroWindow', {
   minimize: () => ipcRenderer.send('window:minimize'),
   close: () => ipcRenderer.send('window:close'),
   togglePin: () => ipcRenderer.send('window:toggle-pin'),
+  toggleCatalog: () => ipcRenderer.send('catalog:toggle'),
+  notifyTheme: (name) => ipcRenderer.send('catalog:theme-from-main', name),
   dockToCorner: () => ipcRenderer.send('window:dock-to-corner'),
   getPinState: () => ipcRenderer.invoke('window:get-pin-state'),
   onPinStateChanged: (callback) => ipcRenderer.on('pin-state-changed', (_event, pinned) => callback(pinned)),

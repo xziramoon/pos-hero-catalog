@@ -14,7 +14,8 @@
   "scripts": {
     "start": "electron .",
     "dist": "electron-builder",
-    "release": "electron-builder --publish always"
+    "release": "electron-builder --publish always",
+    "test": "node test/run-all.js"
   },
   "devDependencies": {
     "electron": "^32.0.0",
@@ -31,6 +32,8 @@
     "files": [
       "main.js",
       "preload.js",
+      "preload-catalog.js",
+      "catalog/**/*",
       "renderer/**/*",
       "build/icon.ico",
       "build/tray.png",
