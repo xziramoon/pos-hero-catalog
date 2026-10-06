@@ -29,6 +29,33 @@
    ```
    ต้องขึ้น `all passed` (ชุดทดสอบใช้ key สุ่มของตัวเอง ไม่ปนกับข้อมูลร้าน)
 
+### เพิ่มเติมสำหรับ Catalog Hero (กระเป๋าสินค้า) — เปิด R2 ก่อน deploy
+
+Worker ตัวเดียวกันนี้รับซิงก์กระเป๋าสินค้าด้วย (path `/catalog/{key}/...`) โดยเก็บรูปไว้ใน Cloudflare R2 จึงต้องเปิด R2 และสร้าง bucket **ก่อน** รัน `npx wrangler deploy` ครั้งแรกหลังอัปเดต ไม่เช่นนั้น deploy จะล้มเหลวเพราะหา bucket ไม่เจอ
+
+1. เปิด R2: Cloudflare dashboard → **R2 Object Storage** → กด Purchase / Enable R2
+   (แผนฟรีมี 10GB และไม่คิดค่า egress แต่ Cloudflare **อาจขอให้ผูกบัตร** ตอนเปิดครั้งแรก)
+2. สร้าง bucket ชื่อ `pos-hero-catalog` (ตัวพิมพ์เล็กตามนี้เป๊ะ) ด้วยคำสั่ง:
+   ```
+   npx wrangler r2 bucket create pos-hero-catalog
+   ```
+   หรือสร้างในหน้า dashboard ก็ได้ ไม่ต้องเปิด public access
+3. deploy ตามปกติ `npx wrangler deploy` (การ deploy ครั้งนี้จะเพิ่ม Durable Object `Catalog` ผ่าน migration v2 ส่วนข้อมูล inbox เดิมไม่หาย)
+4. ทดสอบทั้งชุดเดิมและชุดใหม่ `npm test` ต้องขึ้น `all passed` สองครั้ง (smoke.js และ catalog-smoke.js)
+
+> ถ้าไม่อยากเปิด R2: **ยังไม่มีโหมดสำรอง** (เก็บรูปเป็น BLOB ใน Durable Object แทน R2) ตอนนี้โค้ดต้องใช้ R2 เท่านั้น ถ้า bucket ไม่มี การอัปโหลดรูปจะล้มเหลว (ข้อมูลสินค้าที่ไม่ใช่รูปยังซิงก์ได้) โหมดสำรองจะทำในภายหลังถ้าจำเป็น
+
+#### ตั้ง Catalog Key และ write token
+
+- **Catalog Key**: ข้อความสุ่มยาว 32–128 ตัว (`A-Z a-z 0-9 _ -`) ใช้เป็น path `/catalog/{key}/...` ใครมี key อ่านแคตตาล็อกได้ (เหมาะกับเครื่องพนักงาน) แอปสุ่มให้ 40 ตัว หรือสร้างเองก็ได้
+- **write token**: รหัสยาว 16–256 ตัวสำหรับ **เขียน** (เพิ่ม/แก้/ลบสินค้า อัปโหลดรูป) ส่งใน header `X-Catalog-Write` Worker เก็บเป็นแฮช sha256 เท่านั้น ตั้งได้ครั้งเดียวต่อ key (ตั้งซ้ำจะได้ 409)
+- ตั้งครั้งแรก (ทำครั้งเดียวต่อ key แอปจะมีปุ่มทำให้ในภายหลัง):
+  ```
+  curl -X POST https://pos-hero-inbox.<ชื่อของคุณ>.workers.dev/catalog/<CatalogKey>/init -H "X-Catalog-Write: <writeToken>"
+  ```
+- เครื่องที่มีแค่ Catalog Key (ไม่มี write token) อ่านได้อย่างเดียว เครื่องที่แก้ได้ต้องใส่ทั้งสองค่า **เก็บ write token ไว้ให้ดี** ถ้าลืมจะตั้งใหม่บน key เดิมไม่ได้ ต้องใช้ Catalog Key ใหม่แล้วนำเข้าข้อมูลจากไฟล์สำรอง (`GET /catalog/<key>/export`)
+- ตรวจ: เปิด `https://pos-hero-inbox.<ชื่อ>.workers.dev/catalog/<CatalogKey>/health` ต้องได้ `{"ok":true,...}`
+
 ## ขั้นที่ 2 — เปลี่ยนในแอป POS Hero
 
 ⚙️ ตั้งค่า (ปุ่มที่แผงด้านล่าง) → กล่อง 📥 → ช่อง **Database URL** ใส่ URL จากขั้นที่ 1 (ไม่มี `/` ท้าย)

@@ -6,7 +6,21 @@ compatibility_date = "2025-09-01"
 name = "INBOX"
 class_name = "Inbox"
 
+[[durable_objects.bindings]]
+name = "CATALOG"
+class_name = "Catalog"
+
+# Catalog Hero images. Enable R2 and create the bucket before deploy:
+#   npx wrangler r2 bucket create pos-hero-catalog
+[[r2_buckets]]
+binding = "CATALOG_IMAGES"
+bucket_name = "pos-hero-catalog"
+
 # Durable Object แบบ SQLite ใช้ได้ในแผนฟรีของ Cloudflare
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["Inbox"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["Catalog"]
