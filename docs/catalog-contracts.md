@@ -56,7 +56,7 @@ Images are served to the catalog renderer via a privileged custom scheme
 registered in `catalog/index.js` (`protocol.registerSchemesAsPrivileged` in
 `registerSchemes()`, `protocol.handle` in `init`). Missing file → 404 (Phase 4
 later turns a 404 into a lazy download from R2). CSP of `renderer/catalog/index.html`:
-`default-src 'self'; img-src 'self' data: blob: catimg:; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self' https:`
+`default-src 'self'; img-src 'self' data: blob: catimg:; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self'` (Phase 4)
 
 ## IPC — `window.catalogAPI` (preload-catalog.js; all channels prefixed `catalog:`)
 Phase 2 creates the bridge; later phases ADD methods (append, don't rename).
@@ -159,3 +159,35 @@ Error JSON shape: `{ error: "code", message: "..." }`. Clock-skew reject: HTTP 4
 - Renderer uses the theme's semantic vars `--warning/--danger` (badges, alert tabs) besides `--hero-*`.
 - Phase 4 note: `init()` creates the store with `createStore(dir)`; to add sync, subscribe in `catalog/index.js`
   next to the `store.on('changed')` line.
+
+## Phase 4 notes (sync) — additions and deviations
+- `catalog/catalog-images.js` was created in Phase 4 (Phase 3's pipeline is renderer-only). `createImages(imagesDir)` ->
+  `{saveVariants(hash, ver, {orig?, thumb, full}), write(hash, variant, ver, buf), path, has, read, on('saved')}`.
+  `ver` is `null` for `orig`. **Phase 3 must call `saveVariants` BEFORE `store.put` of the item that references `image.hash/ver`**:
+  `saveVariants` emits `saved`, sync queues `img` uploads (orig only when newly written, thumb/full per ver), and the outbox
+  holds back every item whose `image.hash` still has a pending `img` entry. `write()` (used by lazy downloads) does not queue uploads.
+- `catimg://` now lazily downloads a missing file from R2 through `sync.ensureImage(hash, variant, ver)` (coalesced per file,
+  a miss is remembered 15 s) and 404s only when sync is unconfigured / the image is not on the server.
+- Store additions: `applyRemote(items) -> {applied, kept}`, `resetAll(items, {keepIds})`, `applyRemoteMeta(meta, {union}) -> {applied, needsPush}`,
+  `setRev`, `setMetaRev`, `restamp(ids)`, `restampMeta()`, `syncId` / `setSyncId` / `resetSyncState(id)` (a different Worker URL/key resets lastRev + revs),
+  and a new event `on('local', {ids, meta})` fired only for edits made on this device (`put/putMany/remove/setMeta`). `'changed'` still fires for both.
+  `meta` category union: when a remote meta wins and local items use categories it lacks, those are kept and the meta is re-queued.
+- Outbox (`catalog/catalog-outbox.js`, `outbox.json`): entries `{op, payload, tries, nextAt}`; item payload = full Item snapshot; one entry per item id / `meta` /
+  image file (latest wins). Images first, then meta, then items (<= `worker.batchSize`=200 per POST). Backoff 2s,4s,...,5min.
+- Sync (`catalog/catalog-sync.js`): `createSync({store, outbox, images, getConfig, fetch?, now?, isVisible?})` runs in plain Node (used by `test/sync.e2e.test.js`).
+  `start({watchNetwork})`, `stop()`, `syncNow()`, `setVisible(bool)`, `configChanged()`, `getStatus()`, `on('status')`, `ensureImage`, `testConnection({url,key})`, `initWorker()`.
+  Status: `{state:'ok'|'pending'|'offline'|'unconfigured'|'readonly', pending, lastOkAt, lastError, configured, hasWriteToken, writeBlocked, canEdit, warn}`.
+  `canEdit` is false only for "key configured, no write token" (read-only machine): main refuses `save/remove/setFav/moveCategory/setMeta` and the UI disables editing.
+  Unconfigured = local-only mode, editing stays enabled. `warn` = pulls have failed continuously for `worker.warnAfterMs` (180000).
+  401 on a write -> `writeBlocked`, no write retries until `configChanged()` (setConfig with `worker`, or `set-write-token`).
+  409 `clock_skew` -> `store.setClockOffset(serverTime - Date.now())`, all pending items/meta restamped with the corrected clock, retried (max 2).
+  Items never synced (no `rev`, not queued) are queued once after the first successful pull (so Phase 2 / Phase 5 data uploads).
+  Network change = `os.networkInterfaces()` fingerprint every 5 s + `powerMonitor` resume/unlock (main.js untouched).
+- New config defaults in `worker`: `requestTimeoutMs` 20000, `imageTimeoutMs` 60000, `batchSize` 200, `warnAfterMs` 180000.
+  `setConfig` only accepts `worker.url` and `worker.key` from the renderer (key validated); the write token only via `set-write-token`.
+- New IPC (all `catalog:`-prefixed, catalog window only): `getSyncStatus`, `testConnection({url,key})` (uses the saved write token to also verify it via an empty POST /items),
+  `initWorker()` (POST /init with the saved token), `syncNow()`, `set-write-token(token)` -> `{ok, hasWriteToken}` (never returns the token; '' clears). Event `catalog:sync-status`.
+  Preload: `getSyncStatus, onSyncStatus, testConnection, initWorker, syncNow, setWriteToken`.
+- CSP of the catalog page is now `connect-src 'self'` (the renderer never talks to the Worker; all HTTP is in the main process).
+- Tests: `test/outbox.test.js`, `test/store-merge.test.js`, `test/sync-offline.test.js` (fake fetch/clock), and `test/sync.e2e.test.js`
+  (skipped unless `CATALOG_E2E_BASE`, e.g. `cd cloudflare-inbox && npx wrangler dev` then `CATALOG_E2E_BASE=http://127.0.0.1:8787 node test/sync.e2e.test.js`).

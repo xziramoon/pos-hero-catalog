@@ -27,5 +27,12 @@ contextBridge.exposeInMainWorld('catalogAPI', {
   setHotkey: (accel) => inv('setHotkey', accel),
   onChanged: (cb) => sub('changed', cb),
   onTheme: (cb) => sub('theme', cb),
-  onFocusSearch: (cb) => sub('focus-search', cb)
+  onFocusSearch: (cb) => sub('focus-search', cb),
+  // Phase 4 (sync)
+  getSyncStatus: () => inv('getSyncStatus'),
+  onSyncStatus: (cb) => sub('sync-status', cb),
+  testConnection: (cfg) => inv('testConnection', cfg),
+  initWorker: () => inv('initWorker'),
+  syncNow: () => inv('syncNow'),
+  setWriteToken: (token) => inv('set-write-token', token)
 });

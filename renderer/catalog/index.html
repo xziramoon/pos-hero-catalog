@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
 <meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob: catimg:; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self' https:">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob: catimg:; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>กระเป๋าสินค้า · Catalog Hero</title>
 <link rel="stylesheet" href="../theme-hero.css">
@@ -17,9 +17,9 @@
       <span class="cat-bag" data-icon="bag" data-size="16"></span>
       <span class="hero-title-text">CATALOG HERO</span>
       <span class="hero-subtitle">INVENTORY · กระเป๋าสินค้า</span>
-      <span class="cat-local-tag" title="ข้อมูลเก็บในเครื่องนี้ (ยังไม่ซิงก์)">ในเครื่อง</span>
     </div>
     <div class="hero-titlebar-btns">
+      <button class="cat-sync" id="syncLed" type="button" data-state="unconfigured" title="ข้อมูลเก็บในเครื่องนี้ (ยังไม่ได้ตั้งค่า Cloudflare) คลิกเพื่อตั้งค่า" aria-label="สถานะซิงก์"><span class="led" aria-hidden="true"></span><span class="cat-sync-text" id="syncText">ในเครื่อง</span></button>
       <button class="hero-tbtn" id="btnPin" type="button" title="ปักหมุดลอยบนสุด" aria-label="ปักหมุดลอยบนสุด"><span data-icon="pin" data-size="12"></span></button>
       <button class="hero-tbtn" id="btnHide" type="button" title="ซ่อน (Esc)" aria-label="ซ่อนหน้าต่าง"><span data-icon="minus" data-size="12"></span></button>
       <button class="hero-tbtn hero-tbtn-close" id="btnClose" type="button" title="ปิด (ซ่อนไว้ ไม่ได้ออกจากโปรแกรม)" aria-label="ปิดหน้าต่าง"><span data-icon="close" data-size="12"></span></button>
@@ -29,6 +29,11 @@
   <div class="cat-warnbar" id="hotkeyWarn" hidden>
     <span id="hotkeyWarnText"></span>
     <button class="cat-btn cat-btn-sm" id="hotkeyWarnBtn" type="button">เลือกปุ่มใหม่</button>
+  </div>
+
+  <div class="cat-warnbar" id="syncWarn" hidden role="alert">
+    <span id="syncWarnText">ของที่ใส่ตอนนี้ยังไม่ส่งไปเครื่องอื่น</span>
+    <button class="cat-btn cat-btn-sm" id="syncWarnBtn" type="button">ตั้งค่า Cloudflare</button>
   </div>
 
   <main class="cat-paper">
@@ -71,6 +76,7 @@
         <button class="cat-btn cat-btn-danger" id="btnDelMulti" type="button"><span data-icon="trash" data-size="12"></span>ลบ</button>
       </span>
       <button class="cat-btn" id="btnSettings" type="button"><span data-icon="gear" data-size="12"></span>ตั้งค่า</button>
+      <button class="cat-btn" id="btnCloud" type="button"><span data-icon="gear" data-size="12"></span>ตั้งค่า Cloudflare</button>
       <span class="cat-skill-spacer"></span>
       <span class="cat-hotkey-hint">ปิด/เปิด <kbd id="hotkeyLabel">F2</kbd></span>
     </div>

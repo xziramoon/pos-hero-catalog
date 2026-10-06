@@ -44,7 +44,9 @@
     rowH: 134,
     totalRows: 0,
     rowEls: new Map(),
-    dialog: null
+    dialog: null,
+    sync: null,
+    lastCanEdit: true
   };
 
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -298,8 +300,8 @@
       '<button type="button" class="cat-btn" id="cardCopy" aria-label="คัดลอกรหัส"><span data-icon="copy" data-size="12"></span>คัดลอก</button></div>' +
       '<div class="card-actions">' +
       '<button type="button" class="cat-btn" disabled title="เร็วๆ นี้"><span data-icon="image" data-size="12"></span>ปรับรูป</button>' +
-      '<button type="button" class="cat-btn" id="cardEdit"><span data-icon="edit" data-size="12"></span>แก้ไข</button>' +
-      '<button type="button" class="cat-btn" id="cardFav" aria-pressed="' + !!it.fav + '" aria-label="' + (it.fav ? 'เอาออกจากของโปรด' : 'ตั้งเป็นของโปรด') + '"><span data-icon="star" data-size="12"></span></button>' +
+      '<button type="button" class="cat-btn" id="cardEdit"' + (readOnly() ? ' disabled title="ดูอย่างเดียว"' : '') + '><span data-icon="edit" data-size="12"></span>แก้ไข</button>' +
+      '<button type="button" class="cat-btn" id="cardFav"' + (readOnly() ? ' disabled' : '') + ' aria-pressed="' + !!it.fav + '" aria-label="' + (it.fav ? 'เอาออกจากของโปรด' : 'ตั้งเป็นของโปรด') + '"><span data-icon="star" data-size="12"></span></button>' +
       '</div>';
     I.mount(card);
     const cimg = card.querySelector('.card-img img');
@@ -406,7 +408,7 @@
     $('multiActions').hidden = !S.multi;
     const n = S.picked.size;
     $('multiN').textContent = 'เลือก ' + n + ' ชิ้น';
-    ['btnMoveCat', 'btnFavMulti', 'btnDelMulti'].forEach((id) => { $(id).disabled = n === 0; });
+    ['btnMoveCat', 'btnFavMulti', 'btnDelMulti'].forEach((id) => { $(id).disabled = n === 0 || readOnly(); });
   }
 
   // ------------------------------------------------------------------ dialogs
@@ -440,6 +442,7 @@
   function catOptions() { return S.meta.categories.map((c) => '<option value="' + esc(c) + '">').join(''); }
 
   function itemDialog(it) {
+    if (!guardEdit()) return;
     const isNew = !it;
     const v = it || { name: '', shortName: '', code: '', cat: S.tab.startsWith('cat:') ? S.tab.slice(4) : 'ทั่วไป', barcodes: [] };
     showDialog(
@@ -499,6 +502,7 @@
   const openEditDialog = (it) => itemDialog(it);
 
   function confirmDelete(ids) {
+    if (!guardEdit()) return;
     const names = ids.slice(0, 3).map((id) => labelOf(S.items.get(id) || {})).join(', ');
     showDialog(
       '<h2 id="dlgTitle">ลบสินค้า</h2><p>ลบ ' + ids.length + ' รายการ' + (names ? ' (' + esc(names) + (ids.length > 3 ? ' ...' : '') + ')' : '') +
@@ -520,6 +524,7 @@
   }
 
   function moveCategoryDialog() {
+    if (!guardEdit()) return;
     const ids = Array.from(S.picked);
     if (!ids.length) return;
     showDialog(
@@ -594,6 +599,146 @@
     );
   }
 
+
+  // ------------------------------------------------------------------ sync status / read-only / Cloudflare settings
+  const readOnly = () => !!(S.sync && S.sync.canEdit === false);
+  const READONLY_MSG = 'เครื่องนี้ดูข้อมูลได้อย่างเดียว ใส่ write token ใน "ตั้งค่า Cloudflare" ถ้าต้องการแก้ไข';
+  function guardEdit() {
+    if (!readOnly()) return true;
+    toast(READONLY_MSG, true);
+    return false;
+  }
+  function fmtTime(ms) {
+    if (!ms) return 'ยังไม่เคยซิงก์สำเร็จ';
+    return new Date(ms).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+  function renderSync() {
+    const s = S.sync; if (!s) return;
+    const led = $('syncLed');
+    led.dataset.state = s.state;
+    let text, title;
+    if (s.state === 'unconfigured') { text = 'ในเครื่อง'; title = 'ข้อมูลเก็บในเครื่องนี้ (ยังไม่ได้ตั้งค่า Cloudflare) คลิกเพื่อตั้งค่า'; }
+    else if (s.state === 'ok') { text = 'ซิงก์แล้ว'; title = 'ซิงก์ล่าสุด ' + fmtTime(s.lastOkAt); }
+    else if (s.state === 'pending') {
+      text = s.writeBlocked ? 'token ไม่ถูกต้อง' : 'รอส่ง ' + s.pending;
+      title = s.writeBlocked ? 'write token ไม่ถูกต้อง ค้างส่ง ' + s.pending + ' รายการ' : 'มีงานในคิว ' + s.pending + ' รายการ ซิงก์ล่าสุด ' + fmtTime(s.lastOkAt);
+    } else if (s.state === 'offline') { text = 'ต่อไม่ได้' + (s.pending ? ' (' + s.pending + ')' : ''); title = 'ต่อ Worker ไม่ได้ ซิงก์สำเร็จล่าสุด ' + fmtTime(s.lastOkAt) + (s.pending ? ' · ค้างส่ง ' + s.pending + ' รายการ' : ''); }
+    else { text = 'ดูอย่างเดียว'; title = 'เครื่องนี้ไม่มี write token แก้ไขไม่ได้ ซิงก์ล่าสุด ' + fmtTime(s.lastOkAt); }
+    if (s.lastError && s.state !== 'ok') title += '\n' + s.lastError;
+    $('syncText').textContent = text;
+    led.title = title; led.setAttribute('aria-label', 'สถานะซิงก์: ' + text);
+    $('syncWarn').hidden = !s.warn;
+    // edit controls follow read-only mode
+    const ro = readOnly();
+    $('btnAdd').disabled = ro; $('btnAdd').title = ro ? READONLY_MSG : '';
+    renderMultiBar();
+    if (S.lastCanEdit !== !ro) { S.lastCanEdit = !ro; if (S.cfg) renderCard(); }
+  }
+  function setSyncStatus(s) { S.sync = s; renderSync(); }
+
+  function randomKey(n) {
+    const abc = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let out = '';
+    while (out.length < n) {
+      const buf = new Uint8Array(n * 2); crypto.getRandomValues(buf);
+      for (const b of buf) { if (b < 248 && out.length < n) out += abc[b % 62]; }
+    }
+    return out;
+  }
+  function suggestedWorkerUrl() {
+    try {
+      const c = JSON.parse(localStorage.getItem('inboxConfig') || '{}');
+      const u = String((c && c.dbUrl) || '').trim().replace(/\/+$/, '');
+      return /^https?:\/\/[^\s]+$/i.test(u) ? u : '';
+    } catch (e) { return ''; }
+  }
+
+  async function cloudDialog() {
+    S.cfg = (await api.getConfig()) || S.cfg;
+    const w = S.cfg.worker || {};
+    const suggested = !w.url ? suggestedWorkerUrl() : '';
+    let hasToken = !!S.cfg.hasWriteToken;
+    let lastTest = null;
+    showDialog(
+      '<h2 id="dlgTitle">ตั้งค่า Cloudflare</h2>' +
+      '<p>ใช้ซิงก์กระเป๋าสินค้าระหว่างเครื่อง ทุกเครื่องของร้านใส่ Worker URL และ Catalog Key เดียวกัน เครื่องที่ใส่ write token ด้วยจึงจะแก้ไขได้ ที่เหลือดูได้อย่างเดียว</p>' +
+      '<label class="cat-field">Worker URL (ใช้ค่าเดียวกับช่อง Database URL ของระบบรับเงินโอน)<input id="cfUrl" value="' + esc(w.url || suggested) + '" placeholder="https://pos-hero-inbox.xxxx.workers.dev" autocomplete="off" spellcheck="false" autofocus>' +
+      '<span class="hint" id="cfUrlHint">' + (suggested ? 'ดึงค่ามาจากช่อง Database URL ของระบบรับเงินโอน (ยังไม่ได้บันทึก กด "บันทึก" เพื่อใช้)' : '') + '</span></label>' +
+      '<label class="cat-field">Catalog Key (32-128 ตัว A-Z a-z 0-9 _ -)<span class="cat-field-row"><input id="cfKey" value="' + esc(w.key || '') + '" autocomplete="off" spellcheck="false" placeholder="กดสุ่มคีย์ใหม่ หรือวางคีย์จากเครื่องหลัก">' +
+      '<button type="button" class="cat-btn" id="cfGen">สุ่มคีย์ใหม่</button><button type="button" class="cat-btn" id="cfCopy">คัดลอก</button></span>' +
+      '<span class="hint">คัดลอกคีย์ไปวางในเครื่องอื่นเพื่อใช้กระเป๋าเดียวกัน</span></label>' +
+      '<label class="cat-field">Write token (ตั้งเอง 16 ตัวขึ้นไป ใช้เหมือนกันทุกเครื่องที่แก้ไขได้)<input id="cfToken" type="password" autocomplete="new-password" spellcheck="false" placeholder="' + (hasToken ? 'ตั้งไว้แล้ว (ไม่แสดง) พิมพ์ใหม่เพื่อเปลี่ยน' : 'ว่าง = เครื่องนี้ดูอย่างเดียว') + '">' +
+      '<span class="hint">เก็บไว้ในโปรแกรมเท่านั้น ไม่แสดงซ้ำ ถ้าพิมพ์ใหม่ ระบบจะบันทึกให้ตอนกดทดสอบหรือบันทึก</span></label>' +
+      '<div class="cat-conn-msg" id="cfMsg" role="status" aria-live="polite"></div>' +
+      '<div class="cat-dlg-actions">' +
+      '<button type="button" class="cat-btn" id="cfTest">ทดสอบการเชื่อมต่อ</button>' +
+      '<button type="button" class="cat-btn" id="cfInit" hidden>เริ่มใช้งานคีย์ใหม่</button>' +
+      '<button type="button" class="cat-btn" data-close>ปิด</button>' +
+      '<button type="button" class="cat-btn cat-btn-primary" id="cfSave">บันทึก</button></div>',
+      (root) => {
+        const q = (id) => root.querySelector(id);
+        const msg = (t, kind) => { const m = q('#cfMsg'); m.textContent = t; m.className = 'cat-conn-msg' + (kind ? ' ' + kind : ''); };
+        const vals = () => ({ url: q('#cfUrl').value.trim().replace(/\/+$/, ''), key: q('#cfKey').value.trim() });
+        function validate(v) {
+          if (!/^https?:\/\/[^\s/]+/i.test(v.url)) return 'Worker URL ไม่ถูกต้อง ต้องขึ้นต้นด้วย https:// (คัดลอกจากช่อง Database URL ของระบบรับเงินโอน)';
+          if (!/^[A-Za-z0-9_-]{32,128}$/.test(v.key)) return 'Catalog Key ต้องยาว 32-128 ตัว ใช้ A-Z a-z 0-9 _ - เท่านั้น กด "สุ่มคีย์ใหม่" หรือวางคีย์จากเครื่องหลัก';
+          return null;
+        }
+        async function saveToken() {
+          const t = q('#cfToken').value;
+          if (!t) return true;
+          const r = await api.setWriteToken(t);
+          if (!r || !r.ok) { msg((r && r.message) || 'บันทึก write token ไม่สำเร็จ ลองใหม่', 'bad'); return false; }
+          hasToken = !!r.hasWriteToken; q('#cfToken').value = '';
+          q('#cfToken').placeholder = hasToken ? 'ตั้งไว้แล้ว (ไม่แสดง) พิมพ์ใหม่เพื่อเปลี่ยน' : 'ว่าง = เครื่องนี้ดูอย่างเดียว';
+          return true;
+        }
+        async function saveAll() {
+          const v = vals(); const bad = validate(v);
+          if (bad) { msg(bad, 'bad'); return false; }
+          S.cfg = (await api.setConfig({ worker: v })) || S.cfg;
+          return saveToken();
+        }
+        q('#cfGen').addEventListener('click', () => {
+          if (q('#cfKey').value.trim() && !window.confirm('เปลี่ยนคีย์จะแยกกระเป๋านี้ออกจากเครื่องอื่นที่ใช้คีย์เดิม แน่ใจหรือไม่')) return;
+          q('#cfKey').value = randomKey(40); msg('สุ่มคีย์ใหม่แล้ว กด "คัดลอก" เพื่อนำไปใส่เครื่องอื่น แล้วกด "บันทึก"');
+        });
+        q('#cfCopy').addEventListener('click', async () => {
+          const k = q('#cfKey').value.trim();
+          if (!k) { msg('ยังไม่มีคีย์ให้คัดลอก กดสุ่มคีย์ใหม่ก่อน', 'bad'); return; }
+          await api.copyText(k); msg('คัดลอก Catalog Key แล้ว', 'good');
+        });
+        q('#cfTest').addEventListener('click', async () => {
+          const v = vals(); const bad = validate(v);
+          if (bad) { msg(bad, 'bad'); return; }
+          const btn = q('#cfTest'); btn.disabled = true; msg('กำลังทดสอบ...');
+          try {
+            if (!(await saveToken())) return;
+            lastTest = await api.testConnection(v);
+            msg(lastTest.message || (lastTest.ok ? 'เชื่อมต่อสำเร็จ' : 'เชื่อมต่อไม่สำเร็จ'), lastTest.ok && lastTest.tokenOk !== false ? 'good' : 'bad');
+            q('#cfInit').hidden = !(lastTest.ok && lastTest.initialized === false);
+          } catch (e) { msg('ทดสอบไม่สำเร็จ ลองอีกครั้ง', 'bad'); } finally { btn.disabled = false; }
+        });
+        q('#cfInit').addEventListener('click', async () => {
+          const btn = q('#cfInit'); btn.disabled = true;
+          try {
+            if (!hasToken && !q('#cfToken').value) { msg('ใส่ write token ก่อน (ตั้งเองได้ 16 ตัวขึ้นไป) แล้วกด "เริ่มใช้งานคีย์ใหม่" อีกครั้ง', 'bad'); return; }
+            if (!(await saveAll())) return;
+            const r = await api.initWorker();
+            msg(r.message || (r.ok ? 'เริ่มใช้งานคีย์แล้ว' : 'เริ่มใช้งานคีย์ไม่สำเร็จ'), r.ok ? 'good' : 'bad');
+            if (r.ok) q('#cfInit').hidden = true;
+          } catch (e) { msg('เริ่มใช้งานคีย์ไม่สำเร็จ ลองอีกครั้ง', 'bad'); } finally { btn.disabled = false; }
+        });
+        q('#cfSave').addEventListener('click', async () => {
+          if (!(await saveAll())) return;
+          S.cfg = (await api.getConfig()) || S.cfg;
+          closeDialog();
+          toast('บันทึกการตั้งค่า Cloudflare แล้ว กำลังซิงก์');
+        });
+      }
+    );
+  }
+
   function setHotkeyLabel(a) { $('hotkeyLabel').textContent = a; }
   function updateHotkeyWarn(hk) {
     $('hotkeyWarn').hidden = !!hk.active;
@@ -663,6 +808,9 @@
   });
   $('btnDelMulti').addEventListener('click', () => { const ids = Array.from(S.picked); if (ids.length) confirmDelete(ids); });
   $('btnSettings').addEventListener('click', settingsDialog);
+  $('btnCloud').addEventListener('click', cloudDialog);
+  $('syncLed').addEventListener('click', cloudDialog);
+  $('syncWarnBtn').addEventListener('click', cloudDialog);
   $('hotkeyWarnBtn').addEventListener('click', settingsDialog);
   $('btnHide').addEventListener('click', () => api.hide());
   $('btnClose').addEventListener('click', () => api.hide());
@@ -674,6 +822,7 @@
     search.focus(); search.select();
   });
   api.onChanged(onChanged);
+  api.onSyncStatus(setSyncStatus);
 
   // ------------------------------------------------------------------ boot
   (async function boot() {
@@ -681,6 +830,7 @@
       S.cfg = await api.getConfig();
       applyGridVars();
       await loadAll();
+      try { setSyncStatus(await api.getSyncStatus()); } catch (e) { /* sync status is optional */ }
       setPinned(await api.getPinState());
       const hk = await api.getHotkey();
       setHotkeyLabel(hk.accelerator); updateHotkeyWarn(hk);
