@@ -95,6 +95,13 @@ vendor/opencv.js          (Phase 3)
 `renderer/catalog/index.html` links `../theme-hero.css` (and `../base.css` only if needed) and `../assets/fonts/*`.
 
 ## Worker endpoints — spec §5.3, implemented in `cloudflare-inbox/src/catalog.js`
+Details pinned by Phase 1: write token is sent in header `X-Catalog-Write` for `/init`, `/items`, `/meta` and `PUT /img`
+(16-256 chars; `/init` also accepts body `{writeToken}`). Bad key -> 400 `invalid_key`. `POST /items` -> `{accepted:[{id,rev}], rejected:[{id,reason,current?}], rev, serverTime}`;
+exact resend of an already-stored version is *accepted* (same rev), a losing edit is rejected with reason `stale` + `current`. `changes` returns
+`{items, meta?, rev, more, serverTime}` or `{resetRequired:true, ...}` when `0 < since < tombstoneHorizonRev` (client then re-pulls with `since=0`). `PUT /meta` body
+`{categories, shopName, updatedAt?}`, 409 `clock_skew` or 409 `stale` (+ `meta`). Image variants: `orig`, `thumb-vN`, `full-vN` (plain `thumb`/`full` also accepted but get a short cache, only
+`orig` and versioned names are `immutable`). Extra export of `merge.js`: `exceedsSkew(updatedAt, now)`. `health` also returns `initialized`.
+
 Error JSON shape: `{ error: "code", message: "..." }`. Clock-skew reject: HTTP 409
 `{ error:"clock_skew", serverTime }`. Missing/wrong write token: 401.
 

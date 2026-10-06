@@ -13,6 +13,8 @@
 // {".sv":"timestamp"} ถูกแทนด้วยเวลาของเซิร์ฟเวอร์เหมือน Firebase
 // แต่ละ Inbox Key ได้ Durable Object ของตัวเอง (ข้อมูลแยกกันขาด) ต้องยาว ≥ 32 ตัว เหมือนกฎ Firebase เดิม
 
+import { handleCatalogRequest } from './catalog.js';
+
 const KEY_PATH_RE = /^\/pos_hero_inbox\/([A-Za-z0-9_-]{32,128})\/(events|heartbeat)\.json$/;
 const MAX_BODY = 16 * 1024;
 const MAX_EVENTS = 5000;                       // กันใครยิงสแปมจนพื้นที่เต็ม
@@ -29,6 +31,8 @@ const fbError = (status, msg) => json({ error: msg }, status);
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    const catalogRes = await handleCatalogRequest(request, env); // /catalog/... (has its own CORS/OPTIONS)
+    if (catalogRes) return catalogRes;
     if (request.method === 'OPTIONS') {
       return new Response(null, { headers: {
         'Access-Control-Allow-Origin': '*',
@@ -58,6 +62,8 @@ function parseQueryValue(raw) {
   if (raw == null) return undefined;
   try { return JSON.parse(raw); } catch (e) { return raw; }
 }
+
+export { Catalog } from './catalog.js';
 
 export class Inbox {
   constructor(state) {
