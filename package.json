@@ -15,7 +15,8 @@
     "start": "electron .",
     "dist": "electron-builder",
     "release": "electron-builder --publish always",
-    "test": "node test/run-all.js"
+    "test": "node test/run-all.js",
+    "smoke:pipeline": "electron test/electron/pipeline-smoke/main.js"
   },
   "devDependencies": {
     "electron": "^32.0.0",
@@ -37,7 +38,8 @@
       "renderer/**/*",
       "build/icon.ico",
       "build/tray.png",
-      "build/raw-print.ps1"
+      "build/raw-print.ps1",
+      "!renderer/catalog/dev/**"
     ],
     "asarUnpack": [
       "build/raw-print.ps1"

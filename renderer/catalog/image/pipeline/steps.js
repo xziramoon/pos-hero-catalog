@@ -247,9 +247,9 @@
         var rect = new cv.Rect(rb.x, rb.y, rb.w, rb.h);
         if (ctx.busy) { // no distance-based prior: PR_BGD everywhere, PR_FGD inside the box
           gm.setTo(new cv.Scalar(GC_PR_BGD));
-          var cr = clipRect(rb, w, h), roi = gm.roi(new cv.Rect(cr.x, cr.y, cr.w, cr.h));
+          var cr = clipRect(rb, w, h), roi = ctx.own(gm.roi(new cv.Rect(cr.x, cr.y, cr.w, cr.h)));
           roi.setTo(new cv.Scalar(GC_PR_FGD));
-          roi.delete();
+          ctx.drop(roi);
         } else {
           cv.setRNGSeed(1234);
           cv.grabCut(img, gm, rect, bgd, fgd, cfg.grabcutIters, cv.GC_INIT_WITH_RECT);
@@ -297,7 +297,7 @@
         productLongAnalyze = Math.max(bb.w, bb.h);
         info.maskArea = area;
         if (ctx.roughBox) {
-          var ratio = area / (ctx.roughBox.w * ctx.roughBox.h);
+          var rbc = clipRect(ctx.roughBox, w, h), ratio = area / (rbc.w * rbc.h); // clipped box = what GrabCut really saw
           info.maskRatio = ratio;
           if (ratio < th.maskAreaMin) ctx.reasons.push('mask_area_low');
           if (ratio > th.maskAreaMax) ctx.reasons.push('mask_area_high');
@@ -471,8 +471,8 @@
       var hist;
       if (ctx.mask) hist = U.histOf(gray.data, 1, 0, ctx.mask.data, true);
       else if (ctx.cropRect) {
-        var r = ctx.cropRect, roi = gray.roi(new cv.Rect(r.x, r.y, r.w, r.h)), rc = ctx.own(roi.clone());
-        roi.delete();
+        var r = ctx.cropRect, roi = ctx.own(gray.roi(new cv.Rect(r.x, r.y, r.w, r.h))), rc = ctx.own(roi.clone());
+        ctx.drop(roi);
         hist = U.histOf(rc.data, 1, 0, null, true);
         ctx.drop(rc);
       } else hist = U.histOf(gray.data, 1, 0, null, true);
@@ -513,9 +513,9 @@
         }
         ctx.drop(soft);
       } else if (ctx.cropRect) {
-        var r = ctx.cropRect, roi = img.roi(new cv.Rect(r.x, r.y, r.w, r.h));
+        var r = ctx.cropRect, roi = ctx.own(img.roi(new cv.Rect(r.x, r.y, r.w, r.h)));
         out = ctx.own(roi.clone());
-        roi.delete();
+        ctx.drop(roi);
       } else {
         out = ctx.own(img.clone());
       }

@@ -117,6 +117,13 @@ async function main() {
     assert.ok(Date.now() - t0 < 5000);
   });
 
+  test('preview given the full image has identical analyze image/mask as final', () => {
+    const img = fx['phone-tilted'], e = { maskEdits: [{ mode: 'erase', r: 6, pts: [[300, 120]] }] };
+    const f = run(img, e, { debug: true }), p = run(img, e, { mode: 'preview', debug: true });
+    assert.deepStrictEqual([p.info.analyzeW, p.info.analyzeH], [f.info.analyzeW, f.info.analyzeH]);
+    assert.ok(Buffer.compare(Buffer.from(p.debug.analyzeMask), Buffer.from(f.debug.analyzeMask)) === 0);
+  });
+
   test('brush: erase stroke removes the cap (GC_BGD), add stroke forces a cut-out on a busy bg', () => {
     const img = fx['web-white'];
     const base = run(img, {}, { debug: true }), am = base.debug.analyzeMask, W = base.info.analyzeW;
