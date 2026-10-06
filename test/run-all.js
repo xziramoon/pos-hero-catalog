@@ -1,15 +1,16 @@
 'use strict';
-// Runs every test/*.test.js in its own node process; exits non-zero if any fails.
+// Runs every test/*.test.js with plain node; fails if any file exits non-zero.
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
-const files = fs.readdirSync(__dirname).filter(f => f.endsWith('.test.js')).sort();
+const dir = __dirname;
+const files = fs.readdirSync(dir).filter((f) => f.endsWith('.test.js')).sort();
 let failed = 0;
 for (const f of files) {
-  console.log('> ' + f);
-  const r = spawnSync(process.execPath, [path.join(__dirname, f)], { stdio: 'inherit' });
-  if (r.status !== 0) { failed++; console.log('FAILED ' + f); }
+  process.stdout.write(`\n=== ${f}\n`);
+  const r = spawnSync(process.execPath, [path.join(dir, f)], { stdio: 'inherit' });
+  if (r.status !== 0) { failed++; console.error(`FAILED: ${f}`); }
 }
-console.log(failed ? `\n${failed} test file(s) failed` : `\n${files.length} test file(s) passed`);
+console.log(`\n${files.length - failed}/${files.length} test files passed`);
 process.exit(failed ? 1 : 0);

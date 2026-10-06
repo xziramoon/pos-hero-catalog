@@ -32,6 +32,8 @@
     "files": [
       "main.js",
       "preload.js",
+      "preload-catalog.js",
+      "catalog/**/*",
       "renderer/**/*",
       "build/icon.ico",
       "build/tray.png",

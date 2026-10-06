@@ -10,6 +10,13 @@ const { execFile } = require('child_process');
 
 app.setAppUserModelId('com.xziramoon.poshero');
 
+// Catalog Hero (inventory window) — isolated in ./catalog; failure here must never affect POS.
+let catalog = null;
+try {
+  catalog = require('./catalog');
+  catalog.registerSchemes();
+} catch (e) { console.warn('[catalog] load failed:', e && e.message); catalog = null; }
+
 autoUpdater.autoDownload = true;
 autoUpdater.autoInstallOnAppQuit = true;
 
@@ -320,6 +327,10 @@ app.whenReady().then(() => {
   startRelayServer();
   startNetworkWatcher();
 
+  try {
+    if (catalog) catalog.init({ app, getMainWindow: () => mainWindow, userDataDir: app.getPath('userData'), config: {} });
+  } catch (e) { console.warn('[catalog] init failed:', e && e.message); }
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
@@ -539,6 +550,7 @@ ipcMain.handle('print:raw', async (_event, arg) => {
 
 app.on('before-quit', () => {
   isQuitting = true;
+  try { if (catalog) catalog.shutdown(); } catch (e) { /* ignore */ }
 });
 
 ipcMain.on('window:minimize', () => {
@@ -558,6 +570,8 @@ ipcMain.on('window:toggle-pin', () => {
 });
 
 ipcMain.handle('window:get-pin-state', () => isPinned);
+
+ipcMain.on('catalog:toggle', () => { try { if (catalog) catalog.toggleCatalog(); } catch (e) { /* ignore */ } });
 
 ipcMain.on('window:dock-to-corner', () => {
   dockToCorner();

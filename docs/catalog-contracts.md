@@ -111,3 +111,22 @@ Error JSON shape: `{ error: "code", message: "..." }`. Clock-skew reject: HTTP 4
   branch lands first; others just drop new `*.test.js` files in `test/`.
 - `cloudflare-inbox`: `npm test` runs `smoke.js` and `catalog-smoke.js`
   against `$BASE` (default `http://127.0.0.1:8787` from `wrangler dev`).
+
+## Phase 2 notes (window / local data) — additions and deviations
+- `window.catalogAPI` extra methods (append-only): `getHotkey() -> {accelerator, active, error}`,
+  `setHotkey(accel) -> {ok, error:'in_use'|'invalid'|null, ...}`. `setConfig` ignores `window.hotkey`
+  (use `setHotkey`, which re-registers the global shortcut). `hide()` is fire-and-forget (`ipcRenderer.send`).
+- `catalog:changed` payload is `{ids:[...]|null}` (null = reload everything, e.g. meta changed).
+- `store.get(id)` returns tombstones too (IPC `get` filters them); `store.remove(idOrIds)` accepts a single id or an array;
+  `store.flush()` writes synchronously (called on quit); `store.off()` exists.
+- Window bounds and pin state persist in `config.json` (`window.bounds`, `window.alwaysOnTop`).
+- Search normalization and the tab/filter list live in `renderer/catalog/filters.js` (UMD: browser global
+  `CatalogFilters`, also `require()`-able in node tests). It is NOT in `catalog/shared/` because the renderer
+  cannot load files outside `renderer/` under the CSP.
+- Dev/env flags: `CATALOG_DATA_DIR` (use this dir instead of `userData/catalog`), `CATALOG_OPEN_ON_START=1`,
+  `CATALOG_SCREENSHOT=<png>` (+ `CATALOG_SCREENSHOT_JS`, `CATALOG_QUIT_AFTER_SHOT=1`).
+  `node catalog/tools/seed-demo.js [count] [--dir d] [--images n] [--reset]` fills a store (default `.catalog-dev/`, gitignored).
+- `catimg://` serves `userData/catalog/images/{hash}/{orig|thumb|full}[-v{n}].jpg`; 404 when missing, 400 on bad names.
+- Renderer uses the theme's semantic vars `--warning/--danger` (badges, alert tabs) besides `--hero-*`.
+- Phase 4 note: `init()` creates the store with `createStore(dir)`; to add sync, subscribe in `catalog/index.js`
+  next to the `store.on('changed')` line.
