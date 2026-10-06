@@ -11,6 +11,7 @@ const { protocol, ipcMain, clipboard, net } = require('electron');
 const { createConfigStore } = require('./catalog-config');
 const { createStore } = require('./catalog-store');
 const { createCatalogWindow } = require('./catalog-window');
+const { sanitizeItemInput, sanitizeMetaPatch, sanitizeConfigPatch } = require('./sanitize');
 
 let inited = false;
 let store = null;
@@ -28,14 +29,14 @@ function registerSchemes() {
   }
 }
 
-const HASH_RE = /^[A-Za-z0-9_-]{8,128}$/;
+const HASH_RE = /^[0-9a-f]{64}$/; // lowercase sha256 hex
 const FILE_RE = /^(orig|thumb|full)(-v\d+)?\.jpg$/;
 
 function registerImageProtocol() {
   protocol.handle('catimg', async (req) => {
     try {
       const u = new URL(req.url);
-      const hash = u.hostname;
+      const hash = u.hostname.toLowerCase();
       const file = decodeURIComponent(u.pathname.replace(/^\//, ''));
       if (!HASH_RE.test(hash) || !FILE_RE.test(file)) return new Response('bad request', { status: 400 });
       const p = path.join(imagesDir, hash, file);
@@ -69,10 +70,11 @@ function registerIpc() {
   h('list', () => ({ items: store.list(), meta: store.getMeta() }), { items: [], meta: null });
   h('get', (id) => { const it = store.get(String(id)); return it && !it.deleted ? it : null; }, null);
   h('save', (item) => {
-    if (!item || typeof item !== 'object') throw new Error('bad item');
-    // Never trust renderer-supplied bookkeeping fields.
-    const clean = Object.assign({}, item);
-    delete clean.updatedAt; delete clean.updatedBy; delete clean.rev;
+    const clean = sanitizeItemInput(item);
+    if (clean.id) {
+      const cur = store.get(clean.id);
+      if (!cur || cur.deleted) throw new Error('unknown item id');
+    }
     return store.put(clean);
   }, null);
   h('remove', (ids) => { store.remove((Array.isArray(ids) ? ids : [ids]).map(String)); }, undefined);
@@ -89,11 +91,10 @@ function registerIpc() {
     store.putMany(list);
   }, undefined);
   h('getMeta', () => store.getMeta(), null);
-  h('setMeta', (patch) => store.setMeta(patch), null);
+  h('setMeta', (patch) => store.setMeta(sanitizeMetaPatch(patch)), null);
   h('getConfig', () => configStore.publicConfig(), null);
   h('setConfig', (patch) => {
-    if (patch && patch.window) { patch = Object.assign({}, patch); patch.window = Object.assign({}, patch.window); delete patch.window.hotkey; }
-    configStore.update(patch);
+    configStore.update(sanitizeConfigPatch(patch));
     return configStore.publicConfig();
   }, null);
   h('copyText', (text) => { clipboard.writeText(String(text == null ? '' : text)); }, undefined);

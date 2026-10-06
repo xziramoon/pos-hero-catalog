@@ -49,7 +49,8 @@
 
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const g = () => S.cfg.grid;
-  const hasImg = (it) => !!(it.image && it.image.hash);
+  const validVer = (v) => v == null || (Number.isInteger(v) && v > 0);
+  const hasImg = (it) => !!(it.image && typeof it.image.hash === 'string' && /^[0-9a-f]{64}$/.test(it.image.hash) && validVer(it.image.ver));
   const imgUrl = (it, variant) => 'catimg://' + encodeURIComponent(it.image.hash) + '/' + variant + '-v' + (it.image.ver || 1) + '.jpg';
   const labelOf = (it) => it.shortName || it.name || it.code || '(ไม่มีชื่อ)';
 

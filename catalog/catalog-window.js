@@ -141,6 +141,11 @@ function createCatalogWindow({ getMainWindow, configStore }) {
     else show();
   }
 
+  // Global-shortcut callback: nothing may escape into the main process.
+  function safeToggle() {
+    try { toggle(); } catch (e) { console.warn('[catalog] hotkey toggle failed:', e && e.message); }
+  }
+
   function togglePin() {
     pinned = !pinned;
     if (win && !win.isDestroyed()) win.setAlwaysOnTop(pinned, 'floating');
@@ -168,7 +173,7 @@ function createCatalogWindow({ getMainWindow, configStore }) {
     let error = null;
     try {
       if (!accelerator) throw new Error('empty accelerator');
-      ok = globalShortcut.register(accelerator, toggle);
+      ok = globalShortcut.register(accelerator, safeToggle);
       if (!ok) error = 'in_use';
     } catch (e) {
       error = 'invalid';
