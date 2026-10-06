@@ -42,7 +42,9 @@
       "build/icon.ico",
       "build/tray.png",
       "build/raw-print.ps1",
-      "!renderer/catalog/dev/**"
+      "!renderer/catalog/dev/**",
+      "!renderer/catalog/image/tools/**",
+      "!catalog/tools/**"
     ],
     "asarUnpack": [
       "build/raw-print.ps1"
