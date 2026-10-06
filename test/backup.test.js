@@ -67,4 +67,29 @@ fs.mkdirSync(path.dirname(out));
 assert.ok(bk.exportTo(out).ok);
 assert.deepStrictEqual(Object.keys(JSON.parse(fs.readFileSync(out, 'utf8')).items).length, 1);
 
+// restore: backup items come back as NEW edits (fresh stamp), deleted ones are undeleted, later items stay
+{
+  const snap = path.join(dir, 'snap.json');
+  assert.ok(bk.exportTo(snap).ok);                       // state: item 'a' only
+  const a = store.list()[0];
+  store.put({ id: a.id, name: 'changed' });              // edit after the snapshot
+  store.remove([a.id]);                                  // and delete it
+  const extra = store.put({ code: '2', name: 'later' }); // item created after the snapshot
+  const before = store.get(a.id).updatedAt;
+  clock = new Date(2026, 6, 1, 8, 0, 0);
+  const r = bk.restoreFrom(snap);
+  assert.ok(r.ok, r.error);
+  assert.strictEqual(r.undeleted, 1);
+  assert.ok(/before-restore/.test(r.backup));
+  const back = store.get(a.id);
+  assert.strictEqual(back.deleted, false);
+  assert.strictEqual(back.name, 'a');
+  assert.ok(back.updatedAt >= before, 'restored item is a fresh edit so it wins over older server copies');
+  assert.strictEqual(store.get(extra.id).name, 'later', 'items missing from the backup are left alone');
+  assert.strictEqual(bk.restoreFrom(snap).restored, 0, 'restoring twice changes nothing');
+  assert.strictEqual(bk.restoreFrom(path.join(dir, 'nope.json')).ok, false);
+  fs.writeFileSync(path.join(dir, 'junk.json'), '{"hello":1}');
+  assert.strictEqual(bk.restoreFrom(path.join(dir, 'junk.json')).ok, false);
+}
+
 console.log('backup.test.js OK');

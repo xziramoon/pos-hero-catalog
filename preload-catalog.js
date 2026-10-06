@@ -50,9 +50,12 @@ contextBridge.exposeInMainWorld('catalogAPI', {
   },
   finishImport: () => inv('finishImport'),
   backupNow: (reason) => inv('backupNow', reason),
+  restoreBackup: () => inv('restoreBackup'),
   exportJson: (source) => inv('exportJson', source),
   // Phase 3b (photo editor)
   saveImage: (itemId, payload) => inv('saveImage', itemId, payload),
+  removeImage: (itemId) => inv('removeImage', itemId),
+  hasOrig: (hash) => inv('hasOrig', hash),
   readOrig: async (hash) => {
     const b = await inv('readOrig', hash);
     if (!b) return null;

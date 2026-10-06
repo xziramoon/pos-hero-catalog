@@ -293,6 +293,19 @@ test('poll interval: focused / unfocused / hidden, backoff while pulls fail, war
   sync.stop();
 });
 
+test('orig downloaded from R2 is verified against its sha256 before it is stored', async () => {
+  const w = createFakeWorker();
+  const good = Buffer.from('good-orig-bytes'), hash = sha(good);
+  w.imgs.set(hash + '/orig', good);
+  const c = mk(w);
+  const p = await c.sync.ensureImage(hash, 'orig', null);
+  assert.ok(p && c.images.has(hash, 'orig'), 'matching bytes are stored');
+  const bad = sha(Buffer.from('something else'));
+  w.imgs.set(bad + '/orig', Buffer.from('corrupted download'));
+  assert.strictEqual(await c.sync.ensureImage(bad, 'orig', null), null, 'mismatching bytes are rejected');
+  assert.ok(!c.images.has(bad, 'orig'), 'and nothing is left on disk');
+});
+
 (async () => {
   let failed = 0;
   for (const [name, fn] of tests) {

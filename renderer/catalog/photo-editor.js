@@ -18,6 +18,7 @@
   const UNIT = FRAME / 512;       // stage px per crop unit (crop x/y are tile px at 512 reference)
   const ZMIN = 0.5, ZMAX = 4;
   const MINI = 104;
+  const MAX_STROKES = 300, MAX_PTS = 4000; // same limits main's sanitizeEdit applies, so a saved edit always reproduces the image
 
   const REASONS = {
     too_small: 'รูปเล็กเกินไป ถ่ายใหม่ใกล้ขึ้น',
@@ -396,6 +397,7 @@
       stage.focus({ preventScroll: true });
       stage.setPointerCapture(e.pointerId);
       if (st.view === 'brush') {
+        if (st.edit.maskEdits.length >= MAX_STROKES) { setStatus('แปรงแก้ขอบครบ ' + MAX_STROKES + ' เส้นแล้ว กด "ย้อน" หรือ "ล้าง" ก่อนวาดเพิ่ม', true); return; }
         const p = brushPoint(e);
         st.stroke = { mode: st.brushMode, r: Math.round(st.brushSize / 2 / brushScale() * 10) / 10, pts: [p] };
         drawBrush();
@@ -407,7 +409,8 @@
         moveCursor(e);
         if (st.stroke) {
           const p = brushPoint(e), last = st.stroke.pts[st.stroke.pts.length - 1];
-          if (Math.hypot(p[0] - last[0], p[1] - last[1]) >= Math.max(1, st.stroke.r / 3) && st.stroke.pts.length < 4000) { st.stroke.pts.push(p); drawBrush(); }
+          if (Math.hypot(p[0] - last[0], p[1] - last[1]) >= Math.max(1, st.stroke.r / 3) && st.stroke.pts.length < MAX_PTS) { st.stroke.pts.push(p); drawBrush(); }
+          else if (st.stroke.pts.length >= MAX_PTS) setStatus('เส้นนี้ยาวเกินไป ปล่อยเมาส์แล้วเริ่มเส้นใหม่', true);
         }
         return;
       }
@@ -506,7 +509,8 @@
     function onKeyUp(e) { if (e.key === ' ' && e.target !== cmp) showOrig(false); }
     document.addEventListener('keydown', onKeyDown, true);
     document.addEventListener('keyup', onKeyUp, true);
-    window.addEventListener('blur', () => showOrig(false));
+    const onBlur = () => showOrig(false);
+    window.addEventListener('blur', onBlur);
     function trap(e) {
       const f = Array.from(root.querySelectorAll('input,button:not(:disabled)')).filter((x) => !x.hidden && x.offsetParent !== null);
       f.push(stage); // stage is focusable too
@@ -521,6 +525,7 @@
       st.destroyed = true; clearTimeout(st.timer);
       document.removeEventListener('keydown', onKeyDown, true);
       document.removeEventListener('keyup', onKeyUp, true);
+      window.removeEventListener('blur', onBlur);
       URL.revokeObjectURL(origUrl);
       if (st.bmp && st.bmp.close) st.bmp.close();
       root.remove();
@@ -547,7 +552,7 @@
         destroy(); resolve(res);
       } catch (e) {
         console.warn('[catalog] editor save failed', e);
-        setStatus('บันทึกรูปไม่สำเร็จ ลองอีกครั้ง' + (e && e.message && !/Error invoking/.test(e.message) ? ' (' + e.message + ')' : ''), true);
+        setStatus(e && e.userMessage ? e.userMessage : 'บันทึกรูปไม่สำเร็จ ลองอีกครั้ง' + (e && e.message && !/Error invoking/.test(e.message) ? ' (' + e.message + ')' : ''), true);
         st.saving = false; $('peSave').disabled = false; $('peCancel').disabled = false;
         $('peBusy').hidden = true; $('peBusy').textContent = 'กำลังประมวลผล...';
       }
