@@ -67,5 +67,29 @@
     return tabs;
   }
 
-  return { normalize, buildIndexEntry, matchesQuery, isExactCodeOrBarcode, hasQualityIssue, FILTERS, buildTabs };
+  // Which category tabs stay in the single row. items = [{id, w}] in display order (w = measured px width),
+  // avail = px free for the category tabs, moreW = width of the "+N หมวด" button INCLUDING its gap, gap = px between tabs.
+  // If everything fits there is no button. Otherwise greedy fit in the space left after the button; when the active
+  // tab is hidden it takes the last visible slot (earlier ones are dropped until it fits). -> {visible:[ids], hidden:[ids]}
+  function fitTabs(items, avail, moreW, gap, activeId) {
+    const total = items.reduce((s, t, i) => s + t.w + (i ? gap : 0), 0);
+    if (total <= avail) return { visible: items.map((t) => t.id), hidden: [] };
+    const room = avail - moreW;
+    let used = 0; const vis = [];
+    for (const t of items) {
+      const next = used + t.w + (vis.length ? gap : 0);
+      if (next > room) break;
+      vis.push(t); used = next;
+    }
+    const act = items.find((t) => t.id === activeId);
+    if (act && !vis.includes(act)) {
+      while (vis.length && vis.reduce((s, t, i) => s + t.w + (i ? gap : 0), 0) + act.w + (vis.length ? gap : 0) > room) vis.pop();
+      if (!vis.length && act.w > room) return { visible: [], hidden: items.map((t) => t.id), activeHidden: true };
+      vis.push(act);
+    }
+    const ids = new Set(vis.map((t) => t.id));
+    return { visible: vis.map((t) => t.id), hidden: items.filter((t) => !ids.has(t.id)).map((t) => t.id) };
+  }
+
+  return { fitTabs, normalize, buildIndexEntry, matchesQuery, isExactCodeOrBarcode, hasQualityIssue, FILTERS, buildTabs };
 });

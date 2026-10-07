@@ -58,6 +58,17 @@
 
     <div class="cat-tabsrow">
       <div class="cat-tabs" id="tabs" role="tablist" aria-label="หมวดสินค้า"></div>
+      <span class="cat-more-wrap" id="catMoreWrap" hidden>
+        <button type="button" class="filter-tab cat-more" id="btnCatMore" aria-haspopup="dialog" aria-expanded="false" aria-controls="catPanel"></button>
+        <div class="cat-panel" id="catPanel" role="dialog" aria-label="เลือกหมวด" hidden>
+          <div class="cat-panel-title">เลือกหมวด</div>
+          <label class="cat-search cat-panel-search">
+            <span class="cat-search-ico" data-icon="search" data-size="14"></span>
+            <input id="catPanelSearch" type="text" autocomplete="off" spellcheck="false" placeholder="ค้นหาหมวด" aria-label="ค้นหาหมวด">
+          </label>
+          <div class="cat-panel-grid" id="catPanelGrid"></div>
+        </div>
+      </span>
       <div class="cat-count" id="count" aria-live="polite"></div>
     </div>
 

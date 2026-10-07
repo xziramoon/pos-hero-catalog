@@ -124,13 +124,106 @@
     if (!S.counts) computeCounts();
     S.tabs = F.buildTabs(S.meta, S.cfg.tabs);
     if (!S.tabs.some((t) => t.id === S.tab)) S.tab = 'all';
-    $('tabs').innerHTML = S.tabs.map((t) => {
+    const html = (t) => {
       const active = t.id === S.tab;
       return '<button type="button" role="tab" class="filter-tab' + (active ? ' active' : '') + (t.alert ? ' alert' : '') +
         '" aria-selected="' + active + '" data-tab="' + esc(t.id) + '">' + (t.icon ? I.svg(t.icon, 11) : '') + esc(t.label) +
         '<span class="tab-count">' + (S.counts[t.id] || 0) + '</span></button>';
-    }).join('');
+    };
+    // pinned (all / fav / noimage / check) always visible on the left, then the categories in meta order
+    const cats = S.tabs.filter((t) => t.id.startsWith('cat:'));
+    $('tabs').innerHTML = '<div class="cat-tabs-pinned" id="tabsPinned">' + S.tabs.filter((t) => !t.id.startsWith('cat:')).map(html).join('') + '</div>' +
+      (cats.length ? '<span class="cat-tabs-sep" id="tabsSep" aria-hidden="true"></span>' : '') +
+      '<div class="cat-tabs-cats" id="tabsCats">' + cats.map(html).join('') + '</div>';
+    S.catTabs = cats;
+    layoutTabs();
+    if (!panelOpen()) return;
+    if (cats.length) renderPanel(); else setPanel(false);
   }
+
+  // Category tabs that do not fit in the single row go behind the "+N หมวด" button.
+  function layoutTabs() {
+    const wrap = $('catMoreWrap'), btn = $('btnCatMore'), host = $('tabsCats');
+    const cats = S.catTabs || [];
+    const btns = Array.from(host.children);
+    btns.forEach((b) => { b.hidden = false; });
+    if (!cats.length) { wrap.hidden = true; return; }
+    cats.forEach((t, i) => { host.appendChild(btns[i]); }); // restore meta order (the active tab may have been moved)
+    wrap.hidden = false; btn.classList.remove('active'); btn.removeAttribute('aria-label'); btn.textContent = '+' + cats.length + ' หมวด ▾';
+    const row = document.querySelector('.cat-tabsrow');
+    const sep = $('tabsSep');
+    const avail = row.clientWidth - $('count').offsetWidth - 10 - $('tabsPinned').offsetWidth - (sep ? sep.offsetWidth + 8 : 4);
+    const items = cats.map((t, i) => ({ id: t.id, w: btns[i].offsetWidth }));
+    let r = F.fitTabs(items, avail, wrap.offsetWidth + 10, 4, S.tab);
+    if (!r.hidden.length) { wrap.hidden = true; return; }
+    const act = cats.find((t) => t.id === S.tab);
+    const setMore = (activeHidden, n) => {
+      btn.classList.toggle('active', activeHidden);
+      if (activeHidden) {
+        btn.innerHTML = '<span class="cat-more-name">' + esc(act.label) + '</span><span>' + (n ? ' · +' + n : '') + ' ▾</span>';
+        btn.setAttribute('aria-label', 'หมวดที่เลือก: ' + act.label + ' เปิดรายการหมวดทั้งหมด');
+      } else { btn.textContent = '+' + n + ' หมวด ▾'; btn.removeAttribute('aria-label'); }
+    };
+    if (r.activeHidden) {
+      setMore(true, cats.length - 1); // measure the wider label, then fit again
+      r = F.fitTabs(items, avail, wrap.offsetWidth + 10, 4, S.tab);
+      if (!r.hidden.length) { setMore(false, 0); wrap.hidden = true; return; }
+    }
+    const byId = new Map(cats.map((t, i) => [t.id, btns[i]]));
+    r.hidden.forEach((id) => { byId.get(id).hidden = true; });
+    r.visible.forEach((id) => host.appendChild(byId.get(id))); // active (if swapped in) ends up last
+    if (r.activeHidden) setMore(true, r.hidden.length - 1); else setMore(false, r.hidden.length);
+    if (r.activeHidden) { // pinned tabs + button must still fit: shrink the ellipsized name if needed
+      const nm = btn.querySelector('.cat-more-name');
+      const over = $('tabsPinned').offsetWidth + (sep ? sep.offsetWidth + 8 : 4) + wrap.offsetWidth + 10 + $('count').offsetWidth + 10 - row.clientWidth;
+      if (over > 0) nm.style.maxWidth = Math.max(40, nm.offsetWidth - over) + 'px';
+    }
+  }
+  new ResizeObserver(() => { if (S.cfg && S.catTabs) layoutTabs(); }).observe(document.querySelector('.cat-tabsrow'));
+  new ResizeObserver(() => { if (S.cfg && S.catTabs) layoutTabs(); }).observe($('count'));
+
+  // ---- category picker panel ("+N หมวด")
+  function panelOpen() { return !$('catPanel').hidden; }
+  function setPanel(open, focusBtn) {
+    $('catPanel').hidden = !open; $('btnCatMore').setAttribute('aria-expanded', String(open));
+    if (open) { $('catPanelSearch').value = ''; renderPanel(); $('catPanelSearch').focus(); }
+    else if (focusBtn) $('btnCatMore').focus();
+  }
+  function panelItems() { return Array.from($('catPanelGrid').querySelectorAll('.cat-panel-item')); }
+  function renderPanel() {
+    const q = F.normalize($('catPanelSearch').value);
+    const list = (S.catTabs || []).filter((t) => !q || F.normalize(t.label).includes(q));
+    $('catPanelGrid').innerHTML = list.length ? list.map((t) => {
+      const n = S.counts[t.id] || 0;
+      return '<button type="button" class="cat-panel-item' + (t.id === S.tab ? ' active' : '') + (n ? '' : ' zero') + '" data-tab="' + esc(t.id) +
+        '" title="' + esc(t.label) + '"><span>' + esc(t.label) + '</span><span class="tab-count">' + n + '</span></button>';
+    }).join('') : '<div class="cat-panel-empty">ไม่พบหมวดที่ค้นหา</div>';
+  }
+  function pickCategory(id) { S.tab = id; setPanel(false); refresh(); $('search').focus(); }
+  $('btnCatMore').addEventListener('click', () => setPanel(!panelOpen()));
+  $('catPanelSearch').addEventListener('input', renderPanel);
+  $('catPanelGrid').addEventListener('click', (e) => { const b = e.target.closest('.cat-panel-item'); if (b) pickCategory(b.dataset.tab); });
+  $('catPanel').addEventListener('keydown', (e) => {
+    e.stopPropagation(); // keep the global handlers (Esc hides window, arrows move the grid, typing focuses search) out of it
+    const items = panelItems(), i = items.indexOf(document.activeElement), inSearch = e.target === $('catPanelSearch');
+    if (e.key === 'Escape') { e.preventDefault(); setPanel(false, true); return; }
+    if (inSearch) {
+      if (e.key === 'Enter') { e.preventDefault(); if (items[0]) pickCategory(items[0].dataset.tab); }
+      else if (e.key === 'ArrowDown' && items[0]) { e.preventDefault(); items[0].focus(); }
+      return;
+    }
+    if (i < 0) return;
+    const cols = Math.max(1, getComputedStyle($('catPanelGrid')).gridTemplateColumns.split(' ').length);
+    const move = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: cols, ArrowUp: -cols }[e.key];
+    if (!move) return;
+    e.preventDefault();
+    const j = i + move;
+    if (j < 0) $('catPanelSearch').focus();
+    else if (j < items.length) items[j].focus();
+    else if (move === 1 || Math.floor(i / cols) < Math.floor((items.length - 1) / cols)) items[items.length - 1].focus();
+  });
+  document.addEventListener('mousedown', (e) => { if (panelOpen() && !e.target.closest('.cat-more-wrap')) setPanel(false); });
+  $('catMoreWrap').addEventListener('focusout', (e) => { if (panelOpen() && e.relatedTarget && !$('catMoreWrap').contains(e.relatedTarget)) setPanel(false); });
 
   function computeFiltered() {
     const tab = S.tabs.find((t) => t.id === S.tab) || S.tabs[0];
@@ -1298,6 +1391,7 @@
 
   document.addEventListener('keydown', (e) => {
     if (PE.isOpen()) return; // the photo editor handles its own keys
+    if (panelOpen()) { if (e.key === 'Escape') { e.preventDefault(); setPanel(false, true); } return; } // category panel handles its own keys
     if (menuOpen()) { if (menuKey(e)) return; }
     if (S.dialog) {
       if (e.key === 'Escape') { e.preventDefault(); closeDialog(); }
@@ -1380,7 +1474,7 @@
   ['dragover', 'drop'].forEach((ev) => document.addEventListener(ev, (e) => { if (!e.target.closest || !e.target.closest('.imgf')) e.preventDefault(); }));
 
   api.onFocusSearch(() => {
-    if (S.dialog || PE.isOpen()) return;
+    if (S.dialog || PE.isOpen() || panelOpen()) return;
     search.focus(); search.select();
   });
   api.onChanged(onChanged);
