@@ -84,6 +84,7 @@
     const act = items.find((t) => t.id === activeId);
     if (act && !vis.includes(act)) {
       while (vis.length && vis.reduce((s, t, i) => s + t.w + (i ? gap : 0), 0) + act.w + (vis.length ? gap : 0) > room) vis.pop();
+      if (!vis.length && act.w > room) return { visible: [], hidden: items.map((t) => t.id), activeHidden: true };
       vis.push(act);
     }
     const ids = new Set(vis.map((t) => t.id));

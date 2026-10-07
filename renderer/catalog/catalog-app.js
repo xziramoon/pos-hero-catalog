@@ -149,17 +149,35 @@
     btns.forEach((b) => { b.hidden = false; });
     if (!cats.length) { wrap.hidden = true; return; }
     cats.forEach((t, i) => { host.appendChild(btns[i]); }); // restore meta order (the active tab may have been moved)
-    wrap.hidden = false; btn.textContent = '+' + cats.length + ' หมวด ▾';
+    wrap.hidden = false; btn.classList.remove('active'); btn.removeAttribute('aria-label'); btn.textContent = '+' + cats.length + ' หมวด ▾';
     const row = document.querySelector('.cat-tabsrow');
     const sep = $('tabsSep');
     const avail = row.clientWidth - $('count').offsetWidth - 10 - $('tabsPinned').offsetWidth - (sep ? sep.offsetWidth + 8 : 4);
     const items = cats.map((t, i) => ({ id: t.id, w: btns[i].offsetWidth }));
-    const r = F.fitTabs(items, avail, wrap.offsetWidth + 10, 4, S.tab);
+    let r = F.fitTabs(items, avail, wrap.offsetWidth + 10, 4, S.tab);
     if (!r.hidden.length) { wrap.hidden = true; return; }
+    const act = cats.find((t) => t.id === S.tab);
+    const setMore = (activeHidden, n) => {
+      btn.classList.toggle('active', activeHidden);
+      if (activeHidden) {
+        btn.innerHTML = '<span class="cat-more-name">' + esc(act.label) + '</span><span>' + (n ? ' · +' + n : '') + ' ▾</span>';
+        btn.setAttribute('aria-label', 'หมวดที่เลือก: ' + act.label + ' เปิดรายการหมวดทั้งหมด');
+      } else { btn.textContent = '+' + n + ' หมวด ▾'; btn.removeAttribute('aria-label'); }
+    };
+    if (r.activeHidden) {
+      setMore(true, cats.length - 1); // measure the wider label, then fit again
+      r = F.fitTabs(items, avail, wrap.offsetWidth + 10, 4, S.tab);
+      if (!r.hidden.length) { setMore(false, 0); wrap.hidden = true; return; }
+    }
     const byId = new Map(cats.map((t, i) => [t.id, btns[i]]));
     r.hidden.forEach((id) => { byId.get(id).hidden = true; });
     r.visible.forEach((id) => host.appendChild(byId.get(id))); // active (if swapped in) ends up last
-    btn.textContent = '+' + r.hidden.length + ' หมวด ▾';
+    if (r.activeHidden) setMore(true, r.hidden.length - 1); else setMore(false, r.hidden.length);
+    if (r.activeHidden) { // pinned tabs + button must still fit: shrink the ellipsized name if needed
+      const nm = btn.querySelector('.cat-more-name');
+      const over = $('tabsPinned').offsetWidth + (sep ? sep.offsetWidth + 8 : 4) + wrap.offsetWidth + 10 + $('count').offsetWidth + 10 - row.clientWidth;
+      if (over > 0) nm.style.maxWidth = Math.max(40, nm.offsetWidth - over) + 'px';
+    }
   }
   new ResizeObserver(() => { if (S.cfg && S.catTabs) layoutTabs(); }).observe(document.querySelector('.cat-tabsrow'));
   new ResizeObserver(() => { if (S.cfg && S.catTabs) layoutTabs(); }).observe($('count'));

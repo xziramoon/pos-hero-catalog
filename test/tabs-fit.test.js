@@ -19,9 +19,14 @@ r = fitTabs(mk(50, 50, 50, 100), 200, 80, 4, 'c3');
 assert.deepStrictEqual(r.visible, ['c3']);
 // nothing fits at all: only the active tab is shown
 r = fitTabs(items, 100, 80, 4, 'c2');
-assert.deepStrictEqual(r.visible, ['c2']); assert.strictEqual(r.hidden.length, 4);
+assert.deepStrictEqual(r.visible, []); assert.strictEqual(r.activeHidden, true);
 r = fitTabs(items, 100, 80, 4, 'all');
 assert.deepStrictEqual(r.visible, []); assert.strictEqual(r.hidden.length, 5);
 // empty
 assert.deepStrictEqual(fitTabs([], 0, 80, 4, 'x'), { visible: [], hidden: [] });
 console.log('tabs-fit OK');
+// active tab wider than the room: nothing visible, flagged so the button can show the active name
+r = fitTabs(mk(50, 50, 200), 150, 80, 4, 'c2');
+assert.deepStrictEqual(r.visible, []); assert.strictEqual(r.activeHidden, true); assert.strictEqual(r.hidden.length, 3);
+assert.ok(!fitTabs(items, 200, 80, 4, 'c4').activeHidden);
+console.log('tabs-fit active-hidden OK');
