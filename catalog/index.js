@@ -333,7 +333,8 @@ function devHooks() {
 }
 
 function openCatalog() { try { if (cwin) cwin.show(); } catch (e) { console.warn('[catalog] open failed', e.message); } }
-function toggleCatalog() { try { if (cwin) cwin.toggle(); } catch (e) { console.warn('[catalog] toggle failed', e.message); } }
+// Called by the 👜 buttons on the POS Hero window (the hotkey uses cwin.toggle directly).
+function toggleCatalog() { try { if (cwin) cwin.toggleVisible(); } catch (e) { console.warn('[catalog] toggle failed', e.message); } }
 
 function shutdown() {
   try { if (cwin) cwin.dispose(); } catch (e) { console.warn('[catalog] dispose failed', e.message); }

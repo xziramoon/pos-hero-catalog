@@ -144,13 +144,26 @@ function createCatalogWindow({ getMainWindow, configStore, onVisibility, onFocus
     if (!win || win.isDestroyed()) create();
     if (win.isMinimized()) win.restore();
     win.show();
+    // show() alone leaves the window behind/unfocused when another program
+    // (e.g. Sea & Hill) is in front, so typing would still go to that program.
+    win.moveTop();
+    win.focus();
     sendFocusSearch();
   }
   function hide() { if (win && !win.isDestroyed()) win.hide(); }
+  // Hotkey / bag button: in front and focused -> hide; otherwise (hidden,
+  // minimized, or visible but another program has focus) -> bring it to the
+  // front with the search box focused. Pressing again then hides it.
   function toggle() {
     const alive = win && !win.isDestroyed();
-    if (alive && win.isVisible() && win.isFocused()) hide();
-    else if (alive && win.isVisible()) sendFocusSearch();
+    if (alive && win.isVisible() && !win.isMinimized() && win.isFocused()) hide();
+    else show();
+  }
+  // 👜 buttons on the POS Hero window / mini widget: clicking them always moves
+  // focus to the POS window, so decide by visibility instead of focus.
+  function toggleVisible() {
+    const alive = win && !win.isDestroyed();
+    if (alive && win.isVisible() && !win.isMinimized()) hide();
     else show();
   }
 
@@ -239,7 +252,7 @@ function createCatalogWindow({ getMainWindow, configStore, onVisibility, onFocus
   }
 
   return {
-    show, hide, toggle, togglePin, setTheme, send, initHotkey, registerHotkey, dispose,
+    show, hide, toggle, toggleVisible, togglePin, setTheme, send, initHotkey, registerHotkey, dispose,
     getPinState: () => pinned,
     isFocused: () => !!(win && !win.isDestroyed() && win.isFocused()),
     isVisible: () => !!(win && !win.isDestroyed() && win.isVisible() && !win.isMinimized()),
