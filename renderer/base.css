@@ -381,6 +381,13 @@
         body.print-scale .slip-footer-sig { margin-top: 14px; font-size: calc(15px * var(--print-zoom, 1)); font-weight: bold; text-align: center; }
         body.print-scale .slip-summary-box { border: 1px solid #000 !important; padding: 6px; margin-top: 8px; font-size: calc(16px * var(--print-zoom, 1)); font-weight: bold; }
         body.print-scale .slip-summary-row { display: flex; justify-content: space-between; gap: 6px; margin-bottom: 4px; }
+        /* การจัดแนวคอลัมน์ของ .slip-table เดิมอยู่แค่ใน @media print ซึ่งไม่ทำงานกับการพิมพ์แบบจับภาพนี้
+           (ตัวเลขเลยชิดซ้ายหมด) — ใส่ซ้ำไว้ตรงนี้ด้วย */
+        body.print-scale .slip-table th { text-align: center; }
+        body.print-scale .slip-table td:nth-child(2) { text-align: center; }
+        body.print-scale .slip-table td:nth-child(3) { text-align: right; }
+        body.print-scale .slip-expense td:nth-child(2) { text-align: left; }
+        body.print-scale .slip-subhead { font-size: calc(15px * var(--print-zoom, 1)); font-weight: bold; margin-top: 10px; }
 
         body.print-scale .badge { background: transparent !important; border: 1px solid #000 !important; color: #000 !important; padding: 1px 3px; font-weight: bold; font-size: calc(14px * var(--print-zoom, 1)); }
         body.print-scale .input-dotted { border-bottom: 1px dotted #000 !important; font-size: calc(15px * var(--print-zoom, 1)) !important; }

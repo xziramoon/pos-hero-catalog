@@ -592,8 +592,11 @@
             <div class="slip-summary-row" style="margin-top: 10px; border-top: 1px dotted #000; padding-top: 10px;">
                 <span>สุทธิ (โอน+บัตร+ไทยพลัส):</span> <span id="slipSumNet" style="font-size: 18px;">0</span>
             </div>
-            <div class="slip-summary-row" style="margin-top: 15px; font-size: 14px; font-weight: normal;"><span>หัก ค่าใช้จ่าย:</span> <span id="slipSumExpense">0</span></div>
+            <div class="slip-summary-row" style="margin-top: 15px;"><span>หัก ค่าใช้จ่าย:</span> <span id="slipSumExpense">0</span></div>
         </div>
+        <!-- รายละเอียดค่าใช้จ่าย: จ่ายอะไรไปบ้างในกะนี้ (เติมโดย printSummaryOnly) -->
+        <div class="slip-subhead">รายการค่าใช้จ่าย (<span id="slipSumExpenseCount">0</span> รายการ)</div>
+        <table class="slip-table slip-expense"><colgroup><col style="width: 22%"><col><col style="width: 30%"></colgroup><thead><tr><th>เวลา</th><th>รายการ</th><th>จำนวนเงิน</th></tr></thead><tbody id="slipSumExpenseBody"></tbody></table>
         <div class="slip-footer-sig">ผู้ตรวจสอบ ......................................</div>
     </div>
 

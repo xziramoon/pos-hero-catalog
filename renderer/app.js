@@ -524,6 +524,11 @@
             document.getElementById('slipSumThaiplus').innerText = document.getElementById('sumThaiPlus').innerText;
             document.getElementById('slipSumNet').innerText = document.getElementById('sumNet').innerText;
             document.getElementById('slipSumExpense').innerText = document.getElementById('sumExpense').innerText;
+            const expenses = records.filter(r => r.type === 'expense');
+            document.getElementById('slipSumExpenseCount').innerText = expenses.length;
+            document.getElementById('slipSumExpenseBody').innerHTML = expenses.length
+                ? expenses.map(r => '<tr><td>' + escapeHTML(r.time) + '</td><td>' + escapeHTML(r.name) + '</td><td>' + (parseFloat(r.amount) || 0).toLocaleString('en-US') + '</td></tr>').join('')
+                : '<tr><td colspan="3" style="text-align: center;">- ไม่มีค่าใช้จ่าย -</td></tr>';
             document.body.classList.add('print-summary-only');
             heroPrint();
         }
