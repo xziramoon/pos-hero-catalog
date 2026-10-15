@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<title>Catalog Hero — ปรับรูปสินค้า</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&amp;family=Press+Start+2P&amp;family=VT323&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0a0705}
+a{color:#f6c453}a:hover{color:#ffe27a}
+button{font-family:'Sarabun','Noto Sans Thai',Tahoma,sans-serif}
+.pxbtn:hover{filter:brightness(1.18)}
+input[type=range]{accent-color:#f6c453}
+</style>
+</helmet>
+
+<div style="width: 1280px; height: 800px; box-sizing: border-box; display: flex; flex-direction: column; background: #120d09; background-image: radial-gradient(circle at 18% -10%, rgba(217,154,27,0.20), transparent 55%); font-family: 'Sarabun', 'Noto Sans Thai', Tahoma, sans-serif; color: #f1e9d2; overflow: hidden">
+
+  <!-- title bar -->
+  <div style="height: 36px; flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 0 10px; background: linear-gradient(180deg, #241a44, #150e28); border-bottom: 2px solid #6b4a12; box-shadow: 0 2px 10px rgba(0,0,0,0.5)">
+    <div style="font-family: 'Press Start 2P', monospace; font-size: 10px; letter-spacing: 1px; color: #ffe27a; text-shadow: 0 0 8px rgba(246,196,83,0.5)">PHOTO FORGE</div>
+    <div style="font-size: 15px; color: #d3c3a0">ปรับรูปสินค้า — ตัด · ขยาย · หมุน</div>
+    <div style="flex: 1"></div>
+    <div style="font-size: 13px; color: #a08f6c">ลากรูปเพื่อเลื่อน · หมุนลูกกลิ้งเมาส์เพื่อซูม</div>
+  </div>
+
+  <div style="flex: 1; min-height: 0; display: flex; gap: 24px; padding: 18px 20px 20px">
+
+    <!-- ===== Left: picker + stage ===== -->
+    <div style="width: 500px; flex-shrink: 0; display: flex; flex-direction: column; gap: 12px">
+      <div style="display: flex; align-items: center; gap: 10px">
+        <div style="font-size: 13px; color: #a08f6c">รูปที่กำลังแก้</div>
+        <sc-for list="{{pickers}}" as="p" hint-placeholder-count="2">
+          <button class="pxbtn" onClick="{{p.pick}}" aria-label="{{p.label}}" style="{{p.style}}">
+            <img src="{{p.src}}" alt="" style="width: 100%; height: 100%; object-fit: contain; display: block">
+          </button>
+        </sc-for>
+      </div>
+
+      <!-- stage -->
+      <div onPointerDown="{{down}}" onPointerMove="{{move}}" onPointerUp="{{up}}" onPointerLeave="{{up}}" onWheel="{{wheel}}" style="position: relative; width: 500px; height: 500px; overflow: hidden; background: #fbf8f1; border: 2px solid #6b4a12; box-shadow: 0 0 0 2px #000; cursor: grab; touch-action: none; user-select: none">
+        <div style="position: absolute; left: 50px; top: 50px; width: 400px; height: 400px">
+          <img src="{{cur.src}}" alt="{{cur.name}}" draggable="false" style="{{stageImgStyle}}">
+        </div>
+        <!-- dim outside crop -->
+        <div style="position: absolute; left: 0; top: 0; width: 500px; height: 50px; background: rgba(10,7,5,0.62); pointer-events: none"></div>
+        <div style="position: absolute; left: 0; bottom: 0; width: 500px; height: 50px; background: rgba(10,7,5,0.62); pointer-events: none"></div>
+        <div style="position: absolute; left: 0; top: 50px; width: 50px; height: 400px; background: rgba(10,7,5,0.62); pointer-events: none"></div>
+        <div style="position: absolute; right: 0; top: 50px; width: 50px; height: 400px; background: rgba(10,7,5,0.62); pointer-events: none"></div>
+        <!-- crop frame -->
+        <div style="position: absolute; left: 48px; top: 48px; width: 404px; height: 404px; box-sizing: border-box; border: 2px solid #ffe27a; box-shadow: 0 0 0 1px #000, 0 0 16px rgba(255,226,122,0.5); pointer-events: none">
+          <div style="position: absolute; left: 133px; top: 0; width: 1px; height: 400px; background: rgba(255,226,122,0.35)"></div>
+          <div style="position: absolute; left: 266px; top: 0; width: 1px; height: 400px; background: rgba(255,226,122,0.35)"></div>
+          <div style="position: absolute; top: 133px; left: 0; height: 1px; width: 400px; background: rgba(255,226,122,0.35)"></div>
+          <div style="position: absolute; top: 266px; left: 0; height: 1px; width: 400px; background: rgba(255,226,122,0.35)"></div>
+        </div>
+        <div style="position: absolute; left: 50px; top: 14px; font-size: 13px; color: #ffe27a; pointer-events: none">{{modeTitle}}</div>
+      </div>
+    </div>
+
+    <!-- ===== Right: modes, controls, previews ===== -->
+    <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 14px">
+
+      <div style="font-size: 13px; color: #a08f6c">รูปเดียวกัน ตั้งกรอบได้ 2 แบบ — เลือกว่าจะปรับแบบไหน</div>
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px">
+
+        <!-- mode: thumb -->
+        <button onClick="{{pickThumb}}" style="{{thumbCardStyle}}">
+          <div style="display: flex; justify-content: space-between; align-items: center; width: 100%">
+            <span style="font-size: 15px; font-weight: 600">รูปในช่องตาราง</span>
+            <span style="font-family: 'Press Start 2P', monospace; font-size: 8px; color: #a08f6c">SLOT</span>
+          </div>
+          <div style="font-size: 12px; color: #a08f6c; text-align: left">ซูมเน้นจุดที่บอกว่าเป็นตัวไหน เช่น ชื่อรุ่น กลิ่น ขนาด</div>
+          <div style="display: flex; gap: 6px">
+            <sc-for list="{{slotRow}}" as="s" hint-placeholder-count="4">
+              <sc-if value="{{s.empty}}" hint-placeholder-val="{{ false }}">
+                <div style="width: 96px; height: 116px; box-sizing: border-box; background: #140e08; border: 2px solid #2a1e10"></div>
+              </sc-if>
+              <sc-if value="{{s.filled}}" hint-placeholder-val="{{ true }}">
+                <div style="{{s.frame}}">
+                  <div style="position: relative; width: 88px; height: 88px; overflow: hidden; background: #fbf8f1">
+                    <img src="{{s.src}}" alt="" style="{{s.imgStyle}}">
+                  </div>
+                  <div style="width: 88px; padding: 2px 3px; box-sizing: border-box; font-size: 10.5px; line-height: 1.25; color: #f1e9d2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center">{{s.name}}</div>
+                </div>
+              </sc-if>
+            </sc-for>
+          </div>
+        </button>
+
+        <!-- mode: full -->
+        <button onClick="{{pickFull}}" style="{{fullCardStyle}}">
+          <div style="display: flex; justify-content: space-between; align-items: center; width: 100%">
+            <span style="font-size: 15px; font-weight: 600">รูปใหญ่ในการ์ด</span>
+            <span style="font-family: 'Press Start 2P', monospace; font-size: 8px; color: #a08f6c">CARD</span>
+          </div>
+          <div style="font-size: 12px; color: #a08f6c; text-align: left">เห็นสินค้าทั้งชิ้น ไว้เทียบกับของจริงบนชั้น</div>
+          <div style="position: relative; width: 116px; height: 116px; overflow: hidden; background: #fbf8f1; border: 3px solid #f6c453; box-shadow: 0 0 0 2px #000, 0 0 14px rgba(246,196,83,0.4)">
+            <img src="{{cur.src}}" alt="" style="{{cardImgStyle}}">
+          </div>
+        </button>
+      </div>
+
+      <!-- controls -->
+      <div style="display: flex; flex-direction: column; gap: 12px; padding: 16px; background: linear-gradient(180deg, #241a10, #1a130b); border-radius: 6px; border-style: solid; border-width: 3px; border-color: #ffe27a #6b4a12 #6b4a12 #ffe27a; box-shadow: 0 0 0 1px #000">
+        <div style="display: flex; align-items: center; gap: 12px">
+          <label for="zr" style="width: 54px; font-size: 14px; color: #d3c3a0">ซูม</label>
+          <input id="zr" type="range" min="50" max="400" step="5" value="{{zPct}}" onInput="{{onZoom}}" style="flex: 1">
+          <div style="width: 64px; text-align: right; font-family: 'VT323', monospace; font-size: 22px; color: #ffe27a">{{zPct}}%</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px">
+          <label for="rr" style="width: 54px; font-size: 14px; color: #d3c3a0">หมุน</label>
+          <input id="rr" type="range" min="-20" max="20" step="1" value="{{rFine}}" onInput="{{onRot}}" style="flex: 1">
+          <div style="width: 64px; text-align: right; font-family: 'VT323', monospace; font-size: 22px; color: #ffe27a">{{rLabel}}°</div>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px">
+          <button class="pxbtn" onClick="{{rotL}}" style="height: 40px; padding: 0 12px; background: #1a130b; border: 2px solid #6b4a12; color: #f1e9d2; font-size: 13px; cursor: pointer">↺ 90°</button>
+          <button class="pxbtn" onClick="{{rotR}}" style="height: 40px; padding: 0 12px; background: #1a130b; border: 2px solid #6b4a12; color: #f1e9d2; font-size: 13px; cursor: pointer">↻ 90°</button>
+          <div style="width: 2px; background: #3a2a14"></div>
+          <button class="pxbtn" onClick="{{presetFull}}" style="height: 40px; padding: 0 12px; background: #1a130b; border: 2px solid #6b4a12; color: #f1e9d2; font-size: 13px; cursor: pointer">พอดีทั้งชิ้น (อัตโนมัติ)</button>
+          <button class="pxbtn" onClick="{{presetLabel}}" style="height: 40px; padding: 0 12px; background: #2a1f0c; border: 2px solid #f6c453; color: #ffe27a; font-size: 13px; cursor: pointer">เน้นฉลาก</button>
+          <button class="pxbtn" onClick="{{reset}}" style="height: 40px; padding: 0 12px; background: #1a130b; border: 2px solid #6b4a12; color: #a08f6c; font-size: 13px; cursor: pointer">รีเซ็ต</button>
+        </div>
+      </div>
+
+      <!-- slot name -->
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <label for="nm" style="font-size: 13px; color: #a08f6c">ชื่อสั้นใต้ช่อง (ใส่รุ่น / กลิ่น / ขนาด ให้แยกจากตัวคล้ายกันได้)</label>
+        <input id="nm" value="{{cur.name}}" onInput="{{onName}}" style="height: 44px; padding: 0 12px; background: #140e08; border: 2px solid #6b4a12; box-shadow: inset 0 2px 0 #000; color: #f1e9d2; font-family: 'Sarabun', 'Noto Sans Thai', Tahoma, sans-serif; font-size: 15px; outline: none">
+      </div>
+
+      <div style="flex: 1"></div>
+      <div style="display: flex; justify-content: flex-end; gap: 10px">
+        <button class="pxbtn" style="height: 46px; padding: 0 20px; background: #1a130b; border: 2px solid #6b4a12; color: #d3c3a0; font-size: 15px; cursor: pointer">ยกเลิก</button>
+        <button class="pxbtn" style="height: 46px; padding: 0 24px; background: linear-gradient(180deg, #f59e0b, #b45309); border-style: solid; border-width: 2px; border-color: #ffe27a #6b4a12 #6b4a12 #ffe27a; border-radius: 5px; text-shadow: 0 1px 2px rgba(0,0,0,0.6); color: #fff; font-size: 15px; font-weight: 600; cursor: pointer">บันทึกรูป</button>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":800}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    // crop values are in "reference px" of a 440px crop square; x/y = offset of the image centre, z = zoom, r = degrees
+    this.presets = {
+      shampoo: { full: { x: 0, y: -5, z: 1.3, r: 0 }, label: { x: 0, y: 77, z: 2.7, r: 0 } },
+      soap: { full: { x: -17, y: -27, z: 1.75, r: -5 }, label: { x: -12, y: 5, z: 2.4, r: -5 } }
+    };
+    this.state = {
+      img: 'shampoo',
+      mode: 'thumb',
+      crops: {
+        shampoo: { thumb: Object.assign({}, this.presets.shampoo.label), full: Object.assign({}, this.presets.shampoo.full) },
+        soap: { thumb: Object.assign({}, this.presets.soap.label), full: Object.assign({}, this.presets.soap.full) }
+      },
+      names: { shampoo: 'เคลียร์ เมน ดีพโอเชี่ยน', soap: 'สบู่ตราเจดีย์ ก้อนชมพู' }
+    };
+    this.drag = null;
+  }
+  imgs() {
+    return {
+      shampoo: { src: '/_blob/aedce0073082f314b05448aa239c0a11', fit: 1 },
+      soap: { src: '/_blob/6344bc6aa5bfa8e2258e0924fb912e2c', fit: 0.75 }
+    };
+  }
+  imgStyle(key, c, S) {
+    const f = S / 440;
+    const fit = this.imgs()[key].fit;
+    return 'position:absolute;left:50%;top:50%;width:' + (S * fit) + 'px;max-width:none;transform:translate(-50%,-50%) translate(' +
+      (c.x * f) + 'px,' + (c.y * f) + 'px) rotate(' + c.r + 'deg) scale(' + c.z + ');transform-origin:center;pointer-events:none;user-select:none;';
+  }
+  setCrop(patch) {
+    const { img, mode, crops } = this.state;
+    const next = Object.assign({}, crops);
+    next[img] = Object.assign({}, crops[img]);
+    next[img][mode] = Object.assign({}, crops[img][mode], patch);
+    this.setState({ crops: next });
+  }
+  renderVals() {
+    const imgs = this.imgs();
+    const { img, mode, crops, names } = this.state;
+    const c = crops[img][mode];
+    const keys = ['shampoo', 'soap'];
+
+    const pickers = keys.map((k) => ({
+      src: imgs[k].src,
+      label: names[k],
+      pick: () => this.setState({ img: k }),
+      style: 'width:52px;height:52px;padding:2px;background:#fbf8f1;cursor:pointer;' +
+        (k === img ? 'border:2px solid #ffe27a;box-shadow:0 0 0 2px #000,0 0 12px rgba(255,226,122,0.55);' : 'border:2px solid #6b4a12;opacity:0.7;')
+    }));
+
+    const slotRow = keys.map((k) => ({
+      filled: true, empty: false, src: imgs[k].src, name: names[k],
+      imgStyle: this.imgStyle(k, crops[k].thumb, 88),
+      frame: 'width:96px;height:116px;box-sizing:border-box;padding:2px;display:flex;flex-direction:column;align-items:center;background:#1a130b;' +
+        (k === img ? 'border:2px solid #ffe27a;box-shadow:0 0 0 2px #ffe27a,0 0 14px rgba(255,226,122,0.55);' : 'border:2px solid #6b4a12;')
+    })).concat([{ empty: true, filled: false }, { empty: true, filled: false }]);
+
+    const cardBase = 'display:flex;flex-direction:column;align-items:flex-start;gap:10px;padding:14px;text-align:left;cursor:pointer;color:#f1e9d2;';
+    const on = 'background:#2a1f0c;border:2px solid #f6c453;box-shadow:0 0 0 2px #000,0 0 16px rgba(246,196,83,0.35);';
+    const off = 'background:#1a130b;border:2px solid #3a2a14;opacity:0.85;';
+
+    const rTotal = c.r;
+    const rFine = ((rTotal % 90) + 135) % 90 - 45;
+
+    return {
+      pickers, slotRow,
+      cur: { src: imgs[img].src, name: names[img] },
+      stageImgStyle: this.imgStyle(img, c, 400),
+      cardImgStyle: this.imgStyle(img, crops[img].full, 116),
+      modeTitle: mode === 'thumb' ? 'กรอบ: รูปในช่องตาราง' : 'กรอบ: รูปใหญ่ในการ์ด',
+      thumbCardStyle: cardBase + (mode === 'thumb' ? on : off),
+      fullCardStyle: cardBase + (mode === 'full' ? on : off),
+      pickThumb: () => this.setState({ mode: 'thumb' }),
+      pickFull: () => this.setState({ mode: 'full' }),
+      zPct: Math.round(c.z * 100),
+      rFine: Math.max(-20, Math.min(20, rFine)),
+      rLabel: rTotal,
+      onZoom: (e) => this.setCrop({ z: Number(e.target.value) / 100 }),
+      onRot: (e) => {
+        const base = rTotal - rFine;
+        this.setCrop({ r: base + Number(e.target.value) });
+      },
+      rotL: () => this.setCrop({ r: rTotal - 90 }),
+      rotR: () => this.setCrop({ r: rTotal + 90 }),
+      presetFull: () => this.setCrop(Object.assign({}, this.presets[img].full)),
+      presetLabel: () => this.setCrop(Object.assign({}, this.presets[img].label)),
+      reset: () => this.setCrop({ x: 0, y: 0, z: 1, r: 0 }),
+      onName: (e) => {
+        const n = Object.assign({}, names);
+        n[img] = e.target.value;
+        this.setState({ names: n });
+      },
+      down: (e) => {
+        this.drag = { px: e.clientX, py: e.clientY, x0: c.x, y0: c.y };
+        if (e.currentTarget && e.currentTarget.setPointerCapture) { try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) {} }
+      },
+      move: (e) => {
+        if (!this.drag) return;
+        const k = 440 / 400;
+        this.setCrop({ x: this.drag.x0 + (e.clientX - this.drag.px) * k, y: this.drag.y0 + (e.clientY - this.drag.py) * k });
+      },
+      up: () => { this.drag = null; },
+      wheel: (e) => {
+        const z = Math.max(0.5, Math.min(4, c.z * (e.deltaY < 0 ? 1.08 : 1 / 1.08)));
+        this.setCrop({ z: Math.round(z * 100) / 100 });
+      }
+    };
+  }
+}
+</script>
+</body>
+</html>

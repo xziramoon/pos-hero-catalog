@@ -49,6 +49,15 @@ contextBridge.exposeInMainWorld('catalogAPI', {
     return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength);
   },
   finishImport: () => inv('finishImport'),
+  // spec 9.2 (Google Sheet import)
+  previewSheet: (url) => inv('previewSheet', url),
+  importSheet: (url) => inv('importSheet', url),
+  fetchImportImage: async (index) => {
+    const r = await inv('fetchImportImage', index);
+    if (!r || !r.ok || !r.bytes) return r || { ok: false };
+    const b = r.bytes;
+    return { ok: true, mime: r.mime, bytes: b instanceof ArrayBuffer ? b : b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) };
+  },
   backupNow: (reason) => inv('backupNow', reason),
   restoreBackup: () => inv('restoreBackup'),
   exportJson: (source) => inv('exportJson', source),

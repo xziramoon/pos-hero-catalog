@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<title>Catalog Hero — ช่องเก็บของ</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&amp;family=Press+Start+2P&amp;family=VT323&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0a0705}
+a{color:#f6c453}a:hover{color:#ffe27a}
+button{font-family:'Chakra Petch',sans-serif}
+.slot:hover{filter:brightness(1.25)}
+.pxbtn:hover{filter:brightness(1.15)}
+input::placeholder{color:#8f7f60}
+</style>
+</helmet>
+
+<div style="width: 1280px; height: 800px; box-sizing: border-box; display: flex; flex-direction: column; background: #120d09; background-image: radial-gradient(circle at 18% -10%, rgba(217,154,27,0.20), transparent 55%), radial-gradient(circle at 100% 110%, rgba(246,196,83,0.08), transparent 50%); font-family: 'Chakra Petch', sans-serif; color: #f1e9d2; overflow: hidden">
+
+  <!-- ===== Title bar (frameless window) ===== -->
+  <div style="height: 48px; flex-shrink: 0; display: flex; align-items: center; gap: 14px; padding: 0 12px 0 16px; background: #1a130b; border-bottom: 2px solid #6b4a12; box-shadow: 0 2px 0 #000">
+    <svg width="26" height="26" viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true">
+      <rect x="1" y="4" width="14" height="10" fill="#8a5a1c"></rect>
+      <rect x="1" y="4" width="14" height="4" fill="#b4762a"></rect>
+      <rect x="1" y="8" width="14" height="1" fill="#3a2410"></rect>
+      <rect x="7" y="7" width="2" height="3" fill="#ffe27a"></rect>
+      <rect x="1" y="3" width="14" height="1" fill="#f6c453"></rect>
+      <rect x="1" y="14" width="14" height="1" fill="#3a2410"></rect>
+    </svg>
+    <div style="font-family: 'Press Start 2P', monospace; font-size: 13px; color: #ffe27a; letter-spacing: 1px; text-shadow: 2px 2px 0 #000">CATALOG HERO</div>
+    <div style="font-size: 14px; color: #d3c3a0">ร้าน อึ้งลักเส็ง ซุปเปอร์มาร์เก็ต</div>
+    <div style="flex: 1"></div>
+    <div style="display: flex; align-items: center; gap: 8px; padding: 5px 10px; background: #102015; border: 2px solid #2f6b3a; font-size: 13px; color: #86efac">
+      <span style="width: 8px; height: 8px; background: #4ade80; box-shadow: 0 0 6px #4ade80"></span>
+      LAN ซิงก์แล้ว
+    </div>
+    <button class="pxbtn" style="display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; background: #241a10; border: 2px solid #6b4a12; color: #f1e9d2; font-size: 13px; cursor: pointer">
+      <svg width="14" height="14" viewBox="0 0 8 8" shape-rendering="crispEdges" aria-hidden="true"><rect x="2" y="0" width="4" height="1" fill="#f6c453"></rect><rect x="1" y="1" width="1" height="3" fill="#f6c453"></rect><rect x="6" y="1" width="1" height="3" fill="#f6c453"></rect><rect x="0" y="3" width="8" height="5" fill="#f6c453"></rect><rect x="3" y="5" width="2" height="2" fill="#241a10"></rect></svg>
+      ล็อกการแก้ไข
+    </button>
+    <div style="display: flex; gap: 4px; margin-left: 4px">
+      <button class="pxbtn" aria-label="ปักหมุดลอยบนสุด" style="width: 32px; height: 32px; background: #241a10; border: 2px solid #6b4a12; display: flex; align-items: center; justify-content: center; cursor: pointer">
+        <svg width="14" height="14" viewBox="0 0 8 8" shape-rendering="crispEdges" aria-hidden="true"><rect x="2" y="0" width="4" height="1" fill="#ffe27a"></rect><rect x="3" y="1" width="2" height="3" fill="#ffe27a"></rect><rect x="1" y="4" width="6" height="1" fill="#ffe27a"></rect><rect x="3" y="5" width="2" height="3" fill="#ffe27a"></rect></svg>
+      </button>
+      <button class="pxbtn" aria-label="ย่อหน้าต่าง" style="width: 32px; height: 32px; background: #241a10; border: 2px solid #6b4a12; display: flex; align-items: center; justify-content: center; cursor: pointer">
+        <svg width="12" height="12" viewBox="0 0 8 8" shape-rendering="crispEdges" aria-hidden="true"><rect x="1" y="6" width="6" height="2" fill="#d3c3a0"></rect></svg>
+      </button>
+      <button class="pxbtn" aria-label="ปิด" style="width: 32px; height: 32px; background: #3a1410; border: 2px solid #8a2a1e; display: flex; align-items: center; justify-content: center; cursor: pointer">
+        <svg width="12" height="12" viewBox="0 0 8 8" shape-rendering="crispEdges" aria-hidden="true"><rect x="0" y="0" width="2" height="2" fill="#fca5a5"></rect><rect x="2" y="2" width="1" height="1" fill="#fca5a5"></rect><rect x="3" y="3" width="2" height="2" fill="#fca5a5"></rect><rect x="5" y="5" width="1" height="1" fill="#fca5a5"></rect><rect x="6" y="6" width="2" height="2" fill="#fca5a5"></rect><rect x="6" y="0" width="2" height="2" fill="#fca5a5"></rect><rect x="5" y="2" width="1" height="1" fill="#fca5a5"></rect><rect x="2" y="5" width="1" height="1" fill="#fca5a5"></rect><rect x="0" y="6" width="2" height="2" fill="#fca5a5"></rect></svg>
+      </button>
+    </div>
+  </div><div style="flex: 1; min-height: 0; display: flex; gap: 20px; padding: 18px 20px 20px">
+
+    <!-- ===== Inventory (left) ===== -->
+    <div style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+
+      <!-- stash tabs -->
+      <div style="display: flex; gap: 4px; padding-left: 6px; position: relative; z-index: 1">
+        <sc-for list="{{tabs}}" as="t" hint-placeholder-count="7">
+          <button onClick="{{t.pick}}" style="{{t.style}}">
+            <sc-if value="{{t.isFav}}" hint-placeholder-val="{{ false }}">
+              <svg width="11" height="11" viewBox="0 0 7 7" shape-rendering="crispEdges" aria-hidden="true"><rect x="3" y="0" width="1" height="1" fill="#f6c453"></rect><rect x="2" y="1" width="3" height="1" fill="#f6c453"></rect><rect x="0" y="2" width="7" height="1" fill="#f6c453"></rect><rect x="1" y="3" width="5" height="1" fill="#f6c453"></rect><rect x="2" y="4" width="3" height="1" fill="#f6c453"></rect><rect x="1" y="5" width="2" height="1" fill="#f6c453"></rect><rect x="4" y="5" width="2" height="1" fill="#f6c453"></rect><rect x="1" y="6" width="1" height="1" fill="#f6c453"></rect><rect x="5" y="6" width="1" height="1" fill="#f6c453"></rect></svg>
+            </sc-if>
+            <span>{{t.label}}</span>
+            <span style="font-family: 'VT323', monospace; font-size: 17px; line-height: 1; color: #a08f6c">{{t.count}}</span>
+          </button>
+        </sc-for>
+      </div>
+
+      <!-- inventory panel -->
+      <div style="flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 14px; padding: 16px; background: #241a10; border: 2px solid #6b4a12; box-shadow: 0 0 0 2px #000, inset 0 0 0 2px #1a130b, 0 14px 34px rgba(0,0,0,0.55)">
+
+        <!-- search + actions -->
+        <div style="display: flex; gap: 10px; align-items: center">
+          <div style="flex: 1; display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 12px; background: #140e08; border: 2px solid #6b4a12; box-shadow: inset 0 2px 0 #000">
+            <svg width="16" height="16" viewBox="0 0 8 8" shape-rendering="crispEdges" aria-hidden="true"><rect x="1" y="0" width="3" height="1" fill="#d3c3a0"></rect><rect x="0" y="1" width="1" height="3" fill="#d3c3a0"></rect><rect x="4" y="1" width="1" height="3" fill="#d3c3a0"></rect><rect x="1" y="4" width="3" height="1" fill="#d3c3a0"></rect><rect x="5" y="5" width="1" height="1" fill="#d3c3a0"></rect><rect x="6" y="6" width="2" height="2" fill="#d3c3a0"></rect></svg>
+            <label for="catq" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">ค้นหาชื่อหรือรหัสสินค้า</label>
+            <input id="catq" value="{{q}}" onInput="{{onSearch}}" placeholder="ค้นหาชื่อ หรือยิงบาร์โค้ด…" style="flex: 1; min-width: 0; background: transparent; border: none; outline: none; color: #f1e9d2; font-family: 'Chakra Petch', sans-serif; font-size: 15px">
+            <span style="font-family: 'VT323', monospace; font-size: 16px; color: #a08f6c; border: 1px solid #3a2a14; padding: 0 6px">SCAN</span>
+          </div>
+          <button class="pxbtn" style="height: 44px; padding: 0 14px; background: #1a130b; border: 2px solid #6b4a12; color: #d3c3a0; font-size: 14px; cursor: pointer">เลือกหลายชิ้น</button>
+          <button class="pxbtn" style="height: 44px; padding: 0 16px; background: #b45309; border: 2px solid #f6c453; box-shadow: inset 0 -3px 0 #7c3a06, 0 0 0 2px #000; color: #fff8e6; font-size: 14px; font-weight: 600; cursor: pointer">+ เพิ่มไอเทม</button>
+        </div>
+
+        <!-- slot grid -->
+        <div style="{{gridStyle}}">
+          <sc-for list="{{slots}}" as="item" hint-placeholder-count="60">
+            <sc-if value="{{item.empty}}" hint-placeholder-val="{{ true }}">
+              <div style="width: 72px; height: 72px; box-sizing: border-box; background: #140e08; border: 2px solid #2a1e10; box-shadow: inset 2px 2px 0 #0a0705"></div>
+            </sc-if>
+            <sc-if value="{{item.filled}}" hint-placeholder-val="{{ false }}">
+              <button class="slot" onClick="{{item.pick}}" aria-label="{{item.name}}" style="{{item.slotStyle}}">
+                <sc-if value="{{item.isFav}}" hint-placeholder-val="{{ false }}">
+                  <svg style="position: absolute; top: 3px; right: 3px" width="11" height="11" viewBox="0 0 7 7" shape-rendering="crispEdges" aria-hidden="true"><rect x="3" y="0" width="1" height="1" fill="#ffe27a"></rect><rect x="2" y="1" width="3" height="1" fill="#ffe27a"></rect><rect x="0" y="2" width="7" height="1" fill="#ffe27a"></rect><rect x="1" y="3" width="5" height="1" fill="#ffe27a"></rect><rect x="2" y="4" width="3" height="1" fill="#ffe27a"></rect><rect x="1" y="5" width="2" height="1" fill="#ffe27a"></rect><rect x="4" y="5" width="2" height="1" fill="#ffe27a"></rect><rect x="1" y="6" width="1" height="1" fill="#ffe27a"></rect><rect x="5" y="6" width="1" height="1" fill="#ffe27a"></rect></svg>
+                </sc-if>
+                <sc-if value="{{item.isBottle}}" hint-placeholder-val="{{ false }}">
+                  <svg width="{{iconSize}}" height="{{iconSize}}" viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true"><rect x="7" y="1" width="2" height="2" fill="{{item.c2}}"></rect><rect x="7" y="3" width="2" height="3" fill="#c9a777"></rect><rect x="5" y="6" width="6" height="9" fill="{{item.c1}}"></rect><rect x="5" y="9" width="6" height="3" fill="#f1e9d2"></rect><rect x="5" y="10" width="6" height="1" fill="{{item.c2}}"></rect><rect x="6" y="7" width="1" height="7" fill="#ffffff" fill-opacity="0.25"></rect></svg>
+                </sc-if>
+                <sc-if value="{{item.isSack}}" hint-placeholder-val="{{ false }}">
+                  <svg width="{{iconSize}}" height="{{iconSize}}" viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true"><rect x="5" y="2" width="6" height="2" fill="{{item.c1}}"></rect><rect x="5" y="4" width="6" height="1" fill="#6b4a12"></rect><rect x="3" y="5" width="10" height="10" fill="{{item.c1}}"></rect><rect x="2" y="7" width="1" height="7" fill="{{item.c1}}"></rect><rect x="13" y="7" width="1" height="7" fill="{{item.c1}}"></rect><rect x="5" y="8" width="6" height="4" fill="{{item.c2}}"></rect><rect x="4" y="5" width="1" height="9" fill="#ffffff" fill-opacity="0.35"></rect><rect x="2" y="14" width="12" height="1" fill="#000000" fill-opacity="0.25"></rect></svg>
+                </sc-if>
+                <sc-if value="{{item.isCan}}" hint-placeholder-val="{{ false }}">
+                  <svg width="{{iconSize}}" height="{{iconSize}}" viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true"><rect x="4" y="3" width="8" height="1" fill="#d9d9d9"></rect><rect x="4" y="4" width="8" height="10" fill="{{item.c1}}"></rect><rect x="4" y="7" width="8" height="3" fill="{{item.c2}}"></rect><rect x="5" y="4" width="1" height="10" fill="#ffffff" fill-opacity="0.25"></rect><rect x="4" y="14" width="8" height="1" fill="#8a8a8a"></rect></svg>
+                </sc-if>
+                <sc-if value="{{item.isPack}}" hint-placeholder-val="{{ false }}">
+                  <svg width="{{iconSize}}" height="{{iconSize}}" viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true"><rect x="2" y="3" width="12" height="11" fill="{{item.c1}}"></rect><rect x="2" y="3" width="12" height="1" fill="#000000" fill-opacity="0.22"></rect><rect x="2" y="13" width="12" height="1" fill="#000000" fill-opacity="0.22"></rect><rect x="3" y="4" width="10" height="1" fill="#ffffff" fill-opacity="0.35"></rect><rect x="5" y="6" width="6" height="5" fill="{{item.c2}}"></rect></svg>
+                </sc-if>
+                <sc-if value="{{item.isBox}}" hint-placeholder-val="{{ false }}">
+                  <svg width="{{iconSize}}" height="{{iconSize}}" viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true"><rect x="3" y="3" width="10" height="11" fill="{{item.c1}}"></rect><rect x="3" y="3" width="10" height="2" fill="#ffffff" fill-opacity="0.3"></rect><rect x="5" y="7" width="6" height="4" fill="{{item.c2}}"></rect><rect x="3" y="14" width="10" height="1" fill="#000000" fill-opacity="0.3"></rect></svg>
+                </sc-if>
+                <sc-if value="{{showNames}}" hint-placeholder-val="{{ true }}">
+                  <span style="display: block; width: 100%; padding: 0 3px; box-sizing: border-box; font-size: 10.5px; line-height: 1.2; color: #d3c3a0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center">{{item.name}}</span>
+                </sc-if>
+              </button>
+            </sc-if>
+          </sc-for>
+        </div>
+
+        <!-- capacity + pages -->
+        <div style="margin-top: auto; display: flex; align-items: center; gap: 14px">
+          <div style="font-size: 13px; color: #d3c3a0">ช่องที่ใช้</div>
+          <div style="width: 220px; height: 12px; background: #140e08; border: 2px solid #6b4a12; box-shadow: 0 0 0 1px #000">
+            <div style="{{capStyle}}"></div>
+          </div>
+          <div style="font-family: 'VT323', monospace; font-size: 20px; color: #f1e9d2">{{used}} / {{capacity}}</div>
+          <div style="flex: 1"></div>
+          <button class="pxbtn" aria-label="หน้าก่อนหน้า" style="width: 32px; height: 32px; background: #1a130b; border: 2px solid #6b4a12; display: flex; align-items: center; justify-content: center; cursor: pointer">
+            <svg width="10" height="10" viewBox="0 0 5 5" shape-rendering="crispEdges" aria-hidden="true"><rect x="3" y="0" width="1" height="1" fill="#f6c453"></rect><rect x="2" y="1" width="1" height="1" fill="#f6c453"></rect><rect x="1" y="2" width="1" height="1" fill="#f6c453"></rect><rect x="2" y="3" width="1" height="1" fill="#f6c453"></rect><rect x="3" y="4" width="1" height="1" fill="#f6c453"></rect></svg>
+          </button>
+          <div style="font-family: 'Press Start 2P', monospace; font-size: 10px; color: #ffe27a">PAGE 1/1</div>
+          <button class="pxbtn" aria-label="หน้าถัดไป" style="width: 32px; height: 32px; background: #1a130b; border: 2px solid #6b4a12; display: flex; align-items: center; justify-content: center; cursor: pointer">
+            <svg width="10" height="10" viewBox="0 0 5 5" shape-rendering="crispEdges" aria-hidden="true"><rect x="1" y="0" width="1" height="1" fill="#f6c453"></rect><rect x="2" y="1" width="1" height="1" fill="#f6c453"></rect><rect x="3" y="2" width="1" height="1" fill="#f6c453"></rect><rect x="2" y="3" width="1" height="1" fill="#f6c453"></rect><rect x="1" y="4" width="1" height="1" fill="#f6c453"></rect></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== Item detail (right) ===== -->
+    <div style="width: 360px; flex-shrink: 0; display: flex; flex-direction: column; gap: 14px; padding-top: 36px">
+      <div style="display: flex; flex-direction: column; background: #241a10; border: 2px solid #6b4a12; box-shadow: 0 0 0 2px #000, inset 0 0 0 2px #1a130b, 0 14px 34px rgba(0,0,0,0.55)">
+        <div style="{{rarityStyle}}">
+          <span>{{rarityLabel}}</span>
+          <span style="font-family: 'Press Start 2P', monospace; font-size: 8px; opacity: 0.85">ITEM</span>
+        </div>
+
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 20px 20px 18px">
+          <div style="{{bigFrameStyle}}">
+            <sc-if value="{{sel.isBottle}}" hint-placeholder-val="{{ true }}">
+              <svg width="120" height="120" viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true"><rect x="7" y="1" width="2" height="2" fill="{{sel.c2}}"></rect><rect x="7" y="3" width="2" height="3" fill="#c9a777"></rect><rect x="5" y="6" width="6" height="9" fill="{{sel.c1}}"></rect><rect x="5" y="9" width="6" height="3" fill="#f1e9d2"></rect><rect x="5" y="10" width="6" height="1" fill="{{sel.c2}}"></rect><rect x="6" y="7" width="1" height="7" fill="#ffffff" fill-opacity="0.25"></rect></svg>
+            </sc-if>
+            <sc-if value="{{sel.isSack}}" hint-placeholder-val="{{ false }}">
+              <svg width="120" height="120" viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true"><rect x="5" y="2" width="6" height="2" fill="{{sel.c1}}"></rect><rect x="5" y="4" width="6" height="1" fill="#6b4a12"></rect><rect x="3" y="5" width="10" height="10" fill="{{sel.c1}}"></rect><rect x="2" y="7" width="1" height="7" fill="{{sel.c1}}"></rect><rect x="13" y="7" width="1" height="7" fill="{{sel.c1}}"></rect><rect x="5" y="8" width="6" height="4" fill="{{sel.c2}}"></rect><rect x="4" y="5" width="1" height="9" fill="#ffffff" fill-opacity="0.35"></rect><rect x="2" y="14" width="12" height="1" fill="#000000" fill-opacity="0.25"></rect></svg>
+            </sc-if>
+            <sc-if value="{{sel.isCan}}" hint-placeholder-val="{{ false }}">
+              <svg width="120" height="120" viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true"><rect x="4" y="3" width="8" height="1" fill="#d9d9d9"></rect><rect x="4" y="4" width="8" height="10" fill="{{sel.c1}}"></rect><rect x="4" y="7" width="8" height="3" fill="{{sel.c2}}"></rect><rect x="5" y="4" width="1" height="10" fill="#ffffff" fill-opacity="0.25"></rect><rect x="4" y="14" width="8" height="1" fill="#8a8a8a"></rect></svg>
+            </sc-if>
+            <sc-if value="{{sel.isPack}}" hint-placeholder-val="{{ false }}">
+              <svg width="120" height="120" viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true"><rect x="2" y="3" width="12" height="11" fill="{{sel.c1}}"></rect><rect x="2" y="3" width="12" height="1" fill="#000000" fill-opacity="0.22"></rect><rect x="2" y="13" width="12" height="1" fill="#000000" fill-opacity="0.22"></rect><rect x="3" y="4" width="10" height="1" fill="#ffffff" fill-opacity="0.35"></rect><rect x="5" y="6" width="6" height="5" fill="{{sel.c2}}"></rect></svg>
+            </sc-if>
+            <sc-if value="{{sel.isBox}}" hint-placeholder-val="{{ false }}">
+              <svg width="120" height="120" viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true"><rect x="3" y="3" width="10" height="11" fill="{{sel.c1}}"></rect><rect x="3" y="3" width="10" height="2" fill="#ffffff" fill-opacity="0.3"></rect><rect x="5" y="7" width="6" height="4" fill="{{sel.c2}}"></rect><rect x="3" y="14" width="10" height="1" fill="#000000" fill-opacity="0.3"></rect></svg>
+            </sc-if>
+          </div>
+
+          <div style="font-size: 22px; font-weight: 600; text-align: center; color: #f1e9d2; line-height: 1.3">{{sel.name}}</div>
+          <div style="display: flex; align-items: center; gap: 6px; padding: 3px 10px; background: #1a130b; border: 1px solid #6b4a12; font-size: 13px; color: #d3c3a0">หมวด · {{sel.cat}}</div>
+        </div>
+
+        <div style="margin: 0 16px; border-top: 2px dashed #3a2a14"></div>
+
+        <div style="display: flex; flex-direction: column; gap: 6px; padding: 14px 20px 16px">
+          <div style="font-size: 12px; color: #a08f6c">รหัสสินค้า / บาร์โค้ด</div>
+          <div style="display: flex; align-items: center; gap: 10px">
+            <div style="flex: 1; font-family: 'VT323', monospace; font-size: 30px; line-height: 1; color: #ffe27a; letter-spacing: 1px">{{sel.code}}</div>
+            <button class="pxbtn" onClick="{{copy}}" style="height: 36px; padding: 0 12px; background: #1a130b; border: 2px solid #6b4a12; color: #f1e9d2; font-size: 13px; cursor: pointer">คัดลอก</button>
+          </div>
+          <sc-if value="{{toast}}" hint-placeholder-val="{{ false }}">
+            <div style="font-size: 13px; color: #86efac">✓ คัดลอกรหัสแล้ว</div>
+          </sc-if>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding: 0 16px 16px">
+          <button class="pxbtn" style="height: 44px; background: #b45309; border: 2px solid #f6c453; box-shadow: inset 0 -3px 0 #7c3a06; color: #fff8e6; font-size: 14px; font-weight: 600; cursor: pointer">แก้ไข</button>
+          <button class="pxbtn" style="height: 44px; background: #1a130b; border: 2px solid #6b4a12; color: #f1e9d2; font-size: 14px; cursor: pointer">ย้ายหมวด</button>
+          <button class="pxbtn" onClick="{{toggleFav}}" style="{{favBtnStyle}}">{{favBtnLabel}}</button>
+        </div>
+      </div>
+
+      <!-- legend -->
+      <div style="display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; background: #1a130b; border: 2px solid #3a2a14">
+        <div style="font-family: 'Press Start 2P', monospace; font-size: 9px; color: #a08f6c">LEGEND</div>
+        <div style="display: flex; align-items: center; gap: 10px; font-size: 13px; color: #d3c3a0">
+          <span style="width: 18px; height: 18px; box-sizing: border-box; background: #1a130b; border: 2px solid #6b4a12"></span>ไอเทมทั่วไป
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; font-size: 13px; color: #d3c3a0">
+          <span style="width: 18px; height: 18px; box-sizing: border-box; background: #2a1f0c; border: 2px solid #f6c453; box-shadow: 0 0 8px rgba(246,196,83,0.55)"></span>ของโปรด — กรอบทองระดับตำนาน
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; font-size: 13px; color: #d3c3a0">
+          <span style="width: 18px; height: 18px; box-sizing: border-box; background: #140e08; border: 2px solid #2a1e10"></span>ช่องว่าง
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Body ===== -->
+  
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"columns":{"editor":"range","min":8,"max":11,"step":1,"default":10,"section":"ช่องเก็บของ"},"showNames":{"editor":"boolean","default":true,"section":"ช่องเก็บของ"},"$preview":{"width":1280,"height":800}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { tab: 'all', sel: 7, q: '', favs: [1, 4, 7, 11, 16, 17, 21], toast: false };
+  }
+  items() {
+    const raw = [
+      [1,'น้ำปลาแท้ 700 มล.','เครื่องปรุง','bottle','#8b3a1a','#d4a017'],
+      [2,'ซีอิ๊วขาว 700 มล.','เครื่องปรุง','bottle','#3a2516','#c0392b'],
+      [3,'ซอสหอยนางรม 600 ก.','เครื่องปรุง','bottle','#4a2a12','#d99a1b'],
+      [4,'น้ำมันพืช 1 ลิตร','เครื่องปรุง','bottle','#d9a520','#2f7d32'],
+      [5,'น้ำตาลทราย 1 กก.','เครื่องปรุง','sack','#f1ece0','#3b7dd8'],
+      [6,'ผงชูรส 500 ก.','เครื่องปรุง','pack','#e8e8f0','#c0392b'],
+      [7,'ข้าวหอมมะลิ 5 กก.','ข้าว-แป้ง','sack','#e6d3a3','#2f7d32'],
+      [8,'ข้าวเหนียว 5 กก.','ข้าว-แป้ง','sack','#e6d3a3','#8e44ad'],
+      [9,'แป้งมัน 500 ก.','ข้าว-แป้ง','pack','#f1ece0','#2f7d32'],
+      [10,'แป้งสาลี 1 กก.','ข้าว-แป้ง','sack','#f1ece0','#d35400'],
+      [11,'น้ำดื่ม 1.5 ลิตร','เครื่องดื่ม','bottle','#7fb8e0','#3b7dd8'],
+      [12,'โซดา 325 มล.','เครื่องดื่ม','bottle','#2f7d32','#e8d27a'],
+      [13,'กาแฟกระป๋อง','เครื่องดื่ม','can','#5a3a22','#d99a1b'],
+      [14,'นมกล่อง 225 มล.','เครื่องดื่ม','box','#3b7dd8','#f1e9d2'],
+      [15,'น้ำอัดลม 1.25 ลิตร','เครื่องดื่ม','bottle','#c0392b','#f1e9d2'],
+      [16,'บะหมี่กึ่งสำเร็จรูป','อาหารแห้ง','pack','#f6c453','#c0392b'],
+      [17,'ปลากระป๋อง 155 ก.','อาหารแห้ง','can','#c0392b','#f6c453'],
+      [18,'นมข้นหวาน','อาหารแห้ง','can','#3b7dd8','#f1e9d2'],
+      [19,'วุ้นเส้น 100 ก.','อาหารแห้ง','pack','#f1ece0','#d35400'],
+      [20,'ปลาซาร์ดีน แพ็ค 3','อาหารแห้ง','can','#2f7d32','#f6c453'],
+      [21,'ผงซักฟอก 800 ก.','ของใช้','box','#3b7dd8','#f6c453'],
+      [22,'น้ำยาล้างจาน 500 มล.','ของใช้','bottle','#6dbf4b','#f6c453'],
+      [23,'สบู่ก้อน แพ็ค 4','ของใช้','box','#e88fb0','#f1e9d2'],
+      [24,'ยาสีฟัน 150 ก.','ของใช้','box','#c0392b','#f1e9d2'],
+      [25,'กระดาษทิชชู 6 ม้วน','ของใช้','pack','#f1ece0','#7fb8e0'],
+      [26,'ถุงขยะ 30x40 นิ้ว','ของใช้','pack','#2b2b2b','#6dbf4b']
+    ];
+    const favs = this.state.favs;
+    return raw.map((r) => ({
+      id: r[0], name: r[1], cat: r[2], kind: r[3], c1: r[4], c2: r[5],
+      code: '88500' + String(10000000 + r[0] * 7919).slice(0, 8),
+      isFav: favs.indexOf(r[0]) !== -1,
+      isBottle: r[3] === 'bottle', isSack: r[3] === 'sack', isCan: r[3] === 'can',
+      isPack: r[3] === 'pack', isBox: r[3] === 'box'
+    }));
+  }
+  renderVals() {
+    const cols = this.props.columns ?? 10;
+    const showNames = this.props.showNames ?? true;
+    const rows = 6;
+    const capacity = cols * rows;
+    const all = this.items();
+    const cats = ['เครื่องปรุง', 'ข้าว-แป้ง', 'เครื่องดื่ม', 'อาหารแห้ง', 'ของใช้'];
+    const { tab, q, sel } = this.state;
+
+    const tabDefs = [{ id: 'all', label: 'ทั้งหมด' }]
+      .concat(cats.map((c) => ({ id: c, label: c })))
+      .concat([{ id: 'fav', label: 'ของโปรด', isFav: true }]);
+    const tabs = tabDefs.map((t) => {
+      const count = t.id === 'all' ? all.length : t.id === 'fav' ? all.filter((i) => i.isFav).length : all.filter((i) => i.cat === t.id).length;
+      const active = t.id === tab;
+      const style = 'display:flex;align-items:center;gap:7px;height:38px;padding:0 14px;font-size:14px;cursor:pointer;margin-bottom:-2px;' +
+        (active
+          ? 'background:#241a10;color:#ffe27a;font-weight:600;border:2px solid #6b4a12;border-top:3px solid #f6c453;border-bottom:2px solid #241a10;'
+          : 'background:#16100a;color:#a08f6c;border:2px solid #3a2a14;border-bottom:2px solid #6b4a12;');
+      return { label: t.label, isFav: !!t.isFav, count, style, pick: () => this.setState({ tab: t.id }) };
+    });
+
+    const ql = q.trim().toLowerCase();
+    let list = all.filter((i) => tab === 'all' ? true : tab === 'fav' ? i.isFav : i.cat === tab);
+    if (ql) list = list.filter((i) => i.name.toLowerCase().indexOf(ql) !== -1 || i.code.indexOf(ql) !== -1);
+
+    const iconSize = showNames ? 36 : 46;
+    const slots = list.slice(0, capacity).map((i) => {
+      const isSel = i.id === sel;
+      let s = 'position:relative;width:72px;height:72px;box-sizing:border-box;padding:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;';
+      if (isSel) s += 'background:#3a2a12;border:2px solid #ffe27a;box-shadow:0 0 0 2px #ffe27a,0 0 18px rgba(255,226,122,0.65),inset 0 0 0 2px #120d09;z-index:1;';
+      else if (i.isFav) s += 'background:radial-gradient(circle at 50% 40%,#3a2a10,#1f170c 75%);border:2px solid #f6c453;box-shadow:inset 0 0 0 2px #120d09,0 0 10px rgba(246,196,83,0.4);';
+      else s += 'background:#1a130b;border:2px solid #6b4a12;box-shadow:inset 0 0 0 2px #120d09;';
+      return Object.assign({}, i, { filled: true, empty: false, slotStyle: s, pick: () => this.setState({ sel: i.id }) });
+    });
+    while (slots.length < capacity) slots.push({ empty: true, filled: false });
+
+    const selItem = all.find((i) => i.id === sel) || all[0];
+    const fav = selItem.isFav;
+
+    return {
+      tabs, slots, q, showNames, iconSize, capacity,
+      used: list.length,
+      gridStyle: 'display:grid;grid-template-columns:repeat(' + cols + ',72px);grid-auto-rows:72px;gap:6px;justify-content:center;',
+      capStyle: 'height:100%;background:linear-gradient(#ffe27a,#d99a1b);box-shadow:0 0 8px rgba(246,196,83,0.6);width:' + Math.round(Math.min(1, list.length / capacity) * 100) + '%;',
+      sel: selItem,
+      rarityLabel: fav ? '★ ของโปรด · LEGENDARY' : 'ไอเทมทั่วไป · COMMON',
+      rarityStyle: 'display:flex;justify-content:space-between;align-items:center;padding:8px 14px;font-size:13px;font-weight:600;' +
+        (fav ? 'background:linear-gradient(90deg,#7c4a06,#b45309);color:#ffe27a;border-bottom:2px solid #f6c453;' : 'background:#1a130b;color:#d3c3a0;border-bottom:2px solid #6b4a12;'),
+      bigFrameStyle: 'width:168px;height:168px;box-sizing:border-box;display:flex;align-items:center;justify-content:center;' +
+        (fav ? 'background:radial-gradient(circle at 50% 40%,#4a3412,#1a130b 75%);border:3px solid #f6c453;box-shadow:0 0 0 2px #000,0 0 22px rgba(246,196,83,0.45),inset 0 0 0 3px #120d09;'
+             : 'background:#1a130b;border:3px solid #6b4a12;box-shadow:0 0 0 2px #000,inset 0 0 0 3px #120d09;'),
+      favBtnLabel: fav ? '★ เอาออก' : '☆ ปักดาว',
+      favBtnStyle: 'height:44px;font-size:14px;cursor:pointer;' + (fav ? 'background:#2a1f0c;border:2px solid #f6c453;color:#ffe27a;' : 'background:#1a130b;border:2px solid #6b4a12;color:#f1e9d2;'),
+      toast: this.state.toast,
+      onSearch: (e) => this.setState({ q: e.target.value }),
+      toggleFav: () => {
+        const f = this.state.favs;
+        this.setState({ favs: f.indexOf(selItem.id) !== -1 ? f.filter((x) => x !== selItem.id) : f.concat([selItem.id]) });
+      },
+      copy: () => {
+        this.setState({ toast: true });
+        clearTimeout(this._t);
+        this._t = setTimeout(() => this.setState({ toast: false }), 1600);
+      }
+    };
+  }
+}
+</script>
+</body>
+</html>

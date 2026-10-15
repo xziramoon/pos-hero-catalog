@@ -1139,6 +1139,133 @@
 
   function goToCheckTab() { closeDialog(); S.tab = 'check'; S.query = ''; S.qn = ''; $('search').value = ''; refresh(); }
 
+  // Image jobs of an import, one at a time through the OpenCV worker. A job is either a staged file (j.file, from an
+  // embedded dataURL) or an image link the main process downloads (j.url; asked for by index, prefetched ahead there).
+  // -> { ok, check, retake, failed (pipeline/save), download (could not download), left (stopped) }
+  async function runImportImages(jobs, job, isStopped) {
+    const imgs = { ok: 0, check: 0, retake: 0, failed: 0, download: 0, left: 0 };
+    for (let i = 0; i < jobs.length; i++) {
+      if (isStopped()) { imgs.left = jobs.length - i; break; }
+      const j = jobs[i];
+      job.text('กำลังตัดแต่งรูป ' + fmtN(i + 1) + ' / ' + fmtN(jobs.length) + ' · ' + j.name);
+      job.bar(i, jobs.length);
+      job.sub(imgs.ok + ' ผ่าน · ' + imgs.check + ' ควรตรวจ · ' + imgs.retake + ' ควรถ่ายใหม่' +
+        (imgs.download ? ' · ' + imgs.download + ' ดาวน์โหลดไม่ได้' : '') + (imgs.failed ? ' · ' + imgs.failed + ' ล้มเหลว' : ''));
+      let bytes = null;
+      let mime = j.mime || 'image/jpeg';
+      if (j.url) {
+        const d = await api.fetchImportImage(i);
+        if (!d || !d.ok) { console.warn('[catalog] import image download failed', j.legacyId, d && d.error); imgs.download++; continue; }
+        bytes = d.bytes; mime = d.mime || mime;
+      } else {
+        bytes = await api.readImportImage(j.file);
+        if (!bytes) { console.warn('[catalog] import image missing', j.legacyId); imgs.failed++; continue; }
+      }
+      try {
+        const quality = await processAndSave(j.itemId, new Blob([bytes], { type: mime }), {}, null);
+        imgs[quality] = (imgs[quality] || 0) + 1;
+      } catch (e) { console.warn('[catalog] import image failed', j.legacyId, e); imgs.failed++; }
+    }
+    job.bar(1, 1);
+    return imgs;
+  }
+
+  // ---- import from the Google Sheet of the old catalognew web app (spec 9.2)
+  function sheetImportDialog() {
+    if (!guardEdit()) return;
+    showDialog(
+      '<h2 id="dlgTitle">นำเข้าจาก Google Sheet (แอปแคตตาล็อกเว็บเดิม)</h2><div id="shBody"></div>',
+      (root) => {
+        const q = (id) => root.querySelector(id);
+        const body = () => q('#shBody');
+        let offProgress = null;
+        let checkedUrl = '';
+        S.dialog.cleanup = () => { if (offProgress) offProgress(); S.job = null; };
+
+        body().innerHTML = '<p style="margin-bottom:10px">นำเข้าสินค้า หมวด และรูป จาก Google Sheet ของแอปแคตตาล็อกเว็บเดิม (อ่านอย่างเดียว ชีตจะไม่ถูกแก้ไข) ' +
+          'สินค้าที่มีอยู่แล้วจะไม่ถูกเขียนทับ และนำเข้าซ้ำได้โดยไม่ซ้ำซ้อน</p>' +
+          '<label class="cat-field">ลิงก์ CSV ของชีต (ไฟล์ → แชร์ → เผยแพร่ไปยังเว็บ → CSV)' +
+          '<input type="url" id="shUrl" spellcheck="false" autocomplete="off" placeholder="https://docs.google.com/spreadsheets/d/e/.../pub?...output=csv"></label>' +
+          '<div id="shPrev" style="margin-top:8px"></div>' +
+          '<div class="cat-dlg-actions"><button type="button" class="cat-btn left" id="shCheck">ตรวจข้อมูล</button>' +
+          '<button type="button" class="cat-btn" data-close>ยกเลิก</button><button type="button" class="cat-btn cat-btn-primary" id="shGo" disabled>นำเข้า</button></div>';
+        bindClose(body());
+        const urlIn = q('#shUrl');
+        urlIn.value = (S.cfg && S.cfg.import && S.cfg.import.sheetCsvUrl) || '';
+        urlIn.addEventListener('input', () => { q('#shGo').disabled = urlIn.value.trim() !== checkedUrl || !checkedUrl; });
+        urlIn.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); check(); } });
+        q('#shCheck').addEventListener('click', check);
+        if (urlIn.value) check(); else urlIn.focus();
+
+        async function check() {
+          const url = urlIn.value.trim();
+          const prev = q('#shPrev');
+          if (!prev) return;
+          checkedUrl = '';
+          q('#shGo').disabled = true;
+          if (!url) { prev.innerHTML = '<div class="cat-conn-msg bad">วางลิงก์ CSV ของชีตก่อน</div>'; return; }
+          prev.innerHTML = '<div class="cat-job-sub">กำลังโหลดชีต...</div>';
+          const r = await api.previewSheet(url);
+          if (urlIn.value.trim() !== url || !q('#shPrev')) return;
+          if (!r || !r.ok) { prev.innerHTML = '<div class="cat-conn-msg bad">' + esc((r && r.error) || 'อ่านชีตไม่ได้') + '</div>'; return; }
+          const c = r.counts; const w = r.warnings || {};
+          prev.innerHTML = '<div class="cat-stats" id="shCounts">' + stat('', 'สินค้า', c.items) + stat('', 'มีรูป', c.withImage) + stat('', 'หมวด', c.categories) +
+            (w.invalid ? stat('bad', 'ข้าม (ไม่มีทั้งชื่อและรหัส)', w.invalid) : '') +
+            (w.badImage ? stat('bad', 'ลิงก์รูปใช้ไม่ได้ (นำเข้าโดยไม่มีรูป)', w.badImage) : '') +
+            (w.dupIds ? stat('', 'รหัสภายในซ้ำ (ใช้อันหลังสุด)', w.dupIds) : '') + '</div>' +
+            '<div class="cat-job-sub">ต้องต่ออินเทอร์เน็ตตลอดการนำเข้า เพราะต้องดาวน์โหลดรูปทีละรูป</div>';
+          checkedUrl = url;
+          const go = q('#shGo');
+          go.textContent = 'นำเข้า ' + fmtN(c.items) + ' รายการ';
+          go.disabled = !c.items;
+          go.onclick = () => startImport(url);
+          S.cfg = (await api.getConfig()) || S.cfg;
+        }
+
+        async function startImport(url) {
+          let stop = false;
+          body().innerHTML = JOB_HTML + '<div class="cat-dlg-actions"><button type="button" class="cat-btn cat-btn-danger" id="shStop">หยุด</button></div>';
+          const job = jobHandle(root); job.lock(true);
+          q('#shStop').addEventListener('click', () => { stop = true; q('#shStop').disabled = true; job.sub('กำลังหยุดหลังรูปปัจจุบัน...'); });
+          job.text('กำลังโหลดชีตและนำเข้าข้อมูลสินค้า...'); job.sync();
+          S.job = job;
+          offProgress = api.onImportProgress((p) => { if (p.phase === 'text' || p.phase === 'text-done') { job.bar(p.done, p.total); job.sub(fmtN(p.done) + ' / ' + fmtN(p.total) + ' รายการ'); } });
+          let r = null;
+          let imgs = null;
+          try {
+            r = await api.importSheet(url);
+            if (!r || !r.ok) throw new Error((r && r.error) || 'นำเข้าไม่สำเร็จ');
+            S.meta = (await api.getMeta()) || S.meta;
+            imgs = await runImportImages(r.jobs || [], job, () => stop);
+          } catch (e) {
+            console.warn('[catalog] sheet import failed', e);
+            job.lock(false);
+            body().innerHTML = '<div class="cat-conn-msg bad">' + esc(e.message || 'นำเข้าไม่สำเร็จ') + '</div><div class="cat-dlg-actions"><button type="button" class="cat-btn cat-btn-primary" data-close>ปิด</button></div>';
+            bindClose(body());
+            try { await api.finishImport(); } catch (_) { /* ignore */ }
+            return;
+          }
+          try { await api.finishImport(); } catch (_) { /* ignore */ }
+          job.lock(false);
+          const s = r.summary; const w = r.warnings || {};
+          body().innerHTML = '<div class="cat-job-text">นำเข้าเสร็จแล้ว</div><div class="cat-stats" id="shSummary">' +
+            stat('ok', 'เพิ่มใหม่', s.added) + stat('', 'อัปเดต', s.updated) + stat('', 'ข้าม (ไม่เปลี่ยน/ว่าง/ลบไปแล้ว)', s.unchanged + s.skipped + s.skippedDeleted) +
+            '<span class="sec">รูป</span>' + stat('ok', 'ผ่าน', imgs.ok) + stat('check', 'ควรตรวจ', imgs.check) + stat('retake', 'ควรถ่ายใหม่', imgs.retake) +
+            (imgs.download ? stat('bad', 'ดาวน์โหลดไม่ได้ (อยู่แท็บ "ยังไม่มีรูป" นำเข้าอีกครั้งเพื่อลองใหม่)', imgs.download) : '') +
+            (imgs.failed ? stat('bad', 'ล้มเหลว', imgs.failed) : '') + (imgs.left ? stat('bad', 'ยังไม่ได้ทำ (นำเข้าอีกครั้งเพื่อทำต่อ)', imgs.left) : '') +
+            (w.badImage ? stat('bad', 'ลิงก์รูปใช้ไม่ได้', w.badImage) : '') + '</div>' +
+            '<div class="cat-job-sub" id="jobSync">' + esc(syncLine()) + '</div>' +
+            '<div class="cat-dlg-actions">' + (imgs.check + imgs.retake ? '<button type="button" class="cat-btn" id="shCheckTab">ไปที่แท็บ "ต้องตรวจรูป"</button>' : '') +
+            '<button type="button" class="cat-btn cat-btn-primary" data-close>ปิด</button></div>';
+          bindClose(body());
+          const c = q('#shCheckTab'); if (c) c.addEventListener('click', goToCheckTab);
+          S.tab = 'all'; refresh({ keepScroll: true });
+        }
+      },
+      'wide'
+    );
+  }
+
   // ---- import from the legacy Catalog Hero (spec 9)
   function importDialog() {
     if (!guardEdit()) return;
@@ -1203,27 +1330,13 @@
           job.text('กำลังนำเข้าข้อมูลสินค้า...'); job.sync();
           S.job = job;
           offProgress = api.onImportProgress((p) => { if (p.phase === 'text' || p.phase === 'text-done') { job.bar(p.done, p.total); job.sub(fmtN(p.done) + ' / ' + fmtN(p.total) + ' รายการ'); } });
-          const imgs = { ok: 0, check: 0, retake: 0, failed: 0, left: 0 };
+          let imgs = null;
           let r = null;
           try {
             r = await api.importLegacy(file);
             if (!r || !r.ok) throw new Error((r && r.error) || 'นำเข้าไม่สำเร็จ');
             S.meta = (await api.getMeta()) || S.meta;
-            const jobs = r.jobs || [];
-            for (let i = 0; i < jobs.length; i++) {
-              if (stop) { imgs.left = jobs.length - i; break; }
-              const j = jobs[i];
-              job.text('กำลังตัดแต่งรูป ' + fmtN(i + 1) + ' / ' + fmtN(jobs.length) + ' · ' + j.name);
-              job.bar(i, jobs.length);
-              job.sub(imgs.ok + ' ผ่าน · ' + imgs.check + ' ควรตรวจ · ' + imgs.retake + ' ควรถ่ายใหม่' + (imgs.failed ? ' · ' + imgs.failed + ' ล้มเหลว' : ''));
-              try {
-                const bytes = await api.readImportImage(j.file);
-                if (!bytes) throw new Error('missing staged image');
-                const quality = await processAndSave(j.itemId, new Blob([bytes], { type: j.mime || 'image/jpeg' }), {}, null);
-                imgs[quality] = (imgs[quality] || 0) + 1;
-              } catch (e) { console.warn('[catalog] import image failed', j.legacyId, e); imgs.failed++; }
-            }
-            job.bar(1, 1);
+            imgs = await runImportImages(r.jobs || [], job, () => stop);
           } catch (e) {
             console.warn('[catalog] import failed', e);
             job.lock(false);
@@ -1459,6 +1572,7 @@
   $('btnSettings').addEventListener('click', menuRun(settingsDialog));
   $('btnCloud').addEventListener('click', menuRun(cloudDialog));
   $('btnImport').addEventListener('click', menuRun(importDialog));
+  $('btnImportSheet').addEventListener('click', menuRun(sheetImportDialog));
   $('btnReprocess').addEventListener('click', menuRun(reprocessDialog));
   $('btnBackup').addEventListener('click', backupDialog);
   $('syncProblemsBtn').addEventListener('click', problemsDialog);

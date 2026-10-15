@@ -15,6 +15,7 @@ const { saveImageForItem, removeImageForItem, thaiSaveError } = require('./catal
 const { createOutbox } = require('./catalog-outbox');
 const { createSync } = require('./catalog-sync');
 const migrate = require('./catalog-migrate');
+const sheetImport = require('./catalog-sheet-import');
 const { createBackup } = require('./catalog-backup');
 const { createCatalogWindow } = require('./catalog-window');
 const { createLock } = require('./catalog-lock');
@@ -208,8 +209,39 @@ function registerIpc() {
       return r;
     } finally { importState.running = false; }
   }, { ok: false, error: 'นำเข้าไม่สำเร็จ' });
+  // ---- spec 9.2: import from the Google Sheet of the old catalognew web app (read-only)
+  h('previewSheet', async (url) => {
+    url = String(url || '').trim();
+    const r = await sheetImport.previewSheet({ url, fetchFn: net.fetch });
+    if (r.ok) configStore.update({ import: { sheetCsvUrl: url } });
+    return r;
+  }, { ok: false, error: 'อ่านชีตไม่สำเร็จ' });
+  h('importSheet', async (url) => {
+    requireEditable();
+    url = String(url || '').trim();
+    if (importState.running) return { ok: false, error: 'กำลังนำเข้าอยู่แล้ว' };
+    importState.running = true;
+    try {
+      const b = backup.backupNow('before-import');
+      if (!b.ok && fs.existsSync(path.join(dataDir, 'db.json'))) return { ok: false, error: 'สำรองข้อมูลก่อนนำเข้าไม่สำเร็จ: ' + b.error };
+      const r = await sheetImport.importSheet({ store, dir: dataDir, url, fetchFn: net.fetch, onProgress: (p) => cwin.send('catalog:import-progress', p) });
+      if (r.ok) {
+        const ic = configStore.get().import || {};
+        // the renderer later asks for image i by index; it never hands a URL to the main process
+        importState.fetcher = sheetImport.createImageFetcher(r.jobs.map((j) => j.url || null), {
+          fetchFn: net.fetch, concurrency: ic.imageConcurrency, timeoutMs: ic.imageTimeoutMs, maxBytes: ic.maxImageBytes
+        });
+        cwin.send('catalog:import-progress', { phase: 'text-done', done: r.summary.total, total: r.summary.total });
+      }
+      return r;
+    } finally { importState.running = false; }
+  }, { ok: false, error: 'นำเข้าไม่สำเร็จ' });
+  h('fetchImportImage', async (index) => {
+    if (!importState.fetcher) return { ok: false, error: 'no import' };
+    return importState.fetcher.get(Number(index));
+  }, { ok: false, error: 'download failed' });
   h('readImportImage', (name) => migrate.readStaged(dataDir, name), null);
-  h('finishImport', () => { migrate.cleanupTmp(dataDir); return true; }, false);
+  h('finishImport', () => { migrate.cleanupTmp(dataDir); importState.fetcher = null; return true; }, false);
   h('backupNow', (reason) => {
     const r = backup.backupNow(typeof reason === 'string' ? reason : '');
     return { ok: r.ok, name: r.name, error: r.error };

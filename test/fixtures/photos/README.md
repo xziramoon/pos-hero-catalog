@@ -24,3 +24,7 @@ Notes
   style failures are expected). The real worker applies EXIF via `createImageBitmap`.
 - Eyeball a photo: `node renderer/catalog/image/tools/run-on-file.js test/fixtures/photos/x.jpg test/fixtures/out/`
 - Do not commit private customer photos unless the owner agrees (this folder is tracked).
+
+`sideways-real.jpg` (from the 2026-10-15 handoff) is a real photo of a product lying 90° sideways with only a small
+tilt. The pipeline currently rates it `ok` — it straightens small tilts but does not detect a 90° rotation — so it is
+listed, not asserted, until 90° detection exists. Fix it by hand in "ปรับรูป" (rotate).

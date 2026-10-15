@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<title>Catalog Hero — กระเป๋าสินค้า (ชุดเดียวกับ POS Hero)</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&amp;family=Press+Start+2P&amp;family=VT323&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#07060b}
+a{color:#f6c453}a:hover{color:#ffe27a}
+button{font-family:'Sarabun','Noto Sans Thai',Tahoma,sans-serif}
+.bev:hover{filter:brightness(1.22)}
+.bev:active{transform:translate(1px,1px)}
+.slot{transition:filter 120ms}
+.slot:hover{filter:brightness(1.18)}
+input::placeholder{color:#8f7f60}
+@keyframes copied-rise{0%{opacity:0;transform:translate(-50%,6px)}15%{opacity:1;transform:translate(-50%,-4px)}75%{opacity:1;transform:translate(-50%,-12px)}100%{opacity:0;transform:translate(-50%,-20px)}}
+@keyframes copied-ring{0%{opacity:1}100%{opacity:0}}
+@keyframes toast-in{0%{opacity:0;transform:translateY(-6px)}12%{opacity:1;transform:none}85%{opacity:1}100%{opacity:0}}
+.copied-tag{position:absolute;left:50%;top:30px;z-index:3;pointer-events:none;font-family:'Press Start 2P',monospace;font-size:9px;color:#fff8e6;background:#15803d;padding:5px 6px;border:2px solid #86efac;box-shadow:0 0 0 2px #000,0 0 14px rgba(74,222,128,0.7);animation:copied-rise 1100ms ease-out both}
+.copied-ring{position:absolute;inset:-4px;z-index:2;pointer-events:none;border:3px solid #86efac;box-shadow:0 0 18px rgba(74,222,128,0.85);animation:copied-ring 700ms ease-out both}
+.toast{animation:toast-in 1800ms ease-out both}
+</style>
+</helmet>
+
+<div style="position: relative; width: 1380px; height: 800px; overflow: hidden; background: #07060b; background-image: radial-gradient(circle at 70% 30%, rgba(80,60,140,0.18), transparent 55%), linear-gradient(180deg, #0c0a14, #07060b); font-family: 'Sarabun', 'Noto Sans Thai', Tahoma, sans-serif; color: {{t.text}}">
+
+  <!-- ================= CATALOG WINDOW ================= -->
+  <div style="position: absolute; left: 20px; top: 24px; width: 920px; height: 752px; display: flex; flex-direction: column; background: linear-gradient(180deg, {{t.bg1}}, {{t.bg2}}); background-image: radial-gradient(circle at 15% 0%, {{t.radial}}, transparent 45%), linear-gradient(180deg, {{t.bg1}}, {{t.bg2}}); box-shadow: 0 0 0 1px #000, 0 24px 60px rgba(0,0,0,0.7)">
+
+    <!-- titlebar (same as POS Hero) -->
+    <div style="height: 36px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; padding: 0 6px 0 10px; background: linear-gradient(180deg, #241a44, #150e28); border-bottom: 2px solid {{t.dk}}; box-shadow: 0 2px 10px rgba(0,0,0,0.5)">
+      <div style="display: flex; align-items: center; gap: 8px; min-width: 0">
+        <svg width="18" height="18" viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true">
+          <rect x="5" y="1" width="6" height="1" fill="{{t.goldB}}"></rect><rect x="4" y="2" width="1" height="2" fill="{{t.goldB}}"></rect><rect x="11" y="2" width="1" height="2" fill="{{t.goldB}}"></rect>
+          <rect x="2" y="4" width="12" height="10" fill="#8a5a1c"></rect><rect x="2" y="4" width="12" height="3" fill="#b4762a"></rect>
+          <rect x="7" y="6" width="2" height="2" fill="{{t.goldB}}"></rect><rect x="2" y="14" width="12" height="1" fill="#3a2410"></rect>
+        </svg>
+        <span style="font-family: 'Press Start 2P', monospace; font-size: 10px; letter-spacing: 1px; color: {{t.goldB}}; text-shadow: 0 0 8px {{t.glow}}; white-space: nowrap">CATALOG HERO</span>
+        <span style="font-size: 11px; color: {{t.faint}}; white-space: nowrap">INVENTORY · กระเป๋าสินค้า</span>
+        <span style="width: 8px; height: 8px; margin-left: 4px; background: #4ade80; box-shadow: 0 0 6px #4ade80"></span>
+        <span style="font-size: 11px; color: #86efac; white-space: nowrap">Cloudflare ซิงก์แล้ว</span>
+      </div>
+      <div style="display: flex; gap: 4px">
+        <button class="bev" aria-label="ปักหมุดลอยบนสุด" style="width: 26px; height: 22px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; background: linear-gradient(180deg, {{t.act2}}, {{t.act1}}); border-style: solid; border-width: 2px; border-color: {{t.lt}} {{t.dk}} {{t.dk}} {{t.lt}}; border-radius: 2px; box-shadow: 0 0 8px {{t.glow}}; cursor: pointer">
+          <svg width="10" height="10" viewBox="0 0 8 8" shape-rendering="crispEdges" aria-hidden="true"><rect x="2" y="0" width="4" height="1" fill="#fff8e6"></rect><rect x="3" y="1" width="2" height="3" fill="#fff8e6"></rect><rect x="1" y="4" width="6" height="1" fill="#fff8e6"></rect><rect x="3" y="5" width="2" height="3" fill="#fff8e6"></rect></svg>
+        </button>
+        <button class="bev" aria-label="ซ่อนกระเป๋า (F2)" style="width: 26px; height: 22px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; background: {{t.panel2}}; border-style: solid; border-width: 2px; border-color: {{t.lt}} {{t.dk}} {{t.dk}} {{t.lt}}; border-radius: 2px; cursor: pointer">
+          <svg width="10" height="10" viewBox="0 0 8 8" shape-rendering="crispEdges" aria-hidden="true"><rect x="1" y="6" width="6" height="2" fill="{{t.text}}"></rect></svg>
+        </button>
+        <button class="bev" aria-label="ปิด" style="width: 26px; height: 22px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; background: {{t.panel2}}; border-style: solid; border-width: 2px; border-color: {{t.lt}} {{t.dk}} {{t.dk}} {{t.lt}}; border-radius: 2px; cursor: pointer">
+          <svg width="10" height="10" viewBox="0 0 8 8" shape-rendering="crispEdges" aria-hidden="true"><rect x="0" y="0" width="2" height="2" fill="{{t.text}}"></rect><rect x="2" y="2" width="1" height="1" fill="{{t.text}}"></rect><rect x="3" y="3" width="2" height="2" fill="{{t.text}}"></rect><rect x="5" y="5" width="1" height="1" fill="{{t.text}}"></rect><rect x="6" y="6" width="2" height="2" fill="{{t.text}}"></rect><rect x="6" y="0" width="2" height="2" fill="{{t.text}}"></rect><rect x="5" y="2" width="1" height="1" fill="{{t.text}}"></rect><rect x="2" y="5" width="1" height="1" fill="{{t.text}}"></rect><rect x="0" y="6" width="2" height="2" fill="{{t.text}}"></rect></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- paper -->
+    <div style="flex: 1; min-height: 0; padding: 10px 10px 0">
+      <div style="height: 100%; box-sizing: border-box; display: flex; flex-direction: column; gap: 10px; padding: 12px 14px 14px; background: linear-gradient(180deg, {{t.panel}}, {{t.panel2}}); border-radius: 6px; border-style: solid; border-width: 3px; border-color: {{t.lt}} {{t.dk}} {{t.dk}} {{t.lt}}; box-shadow: 0 0 0 1px #000, 0 14px 34px rgba(0,0,0,0.55), 0 0 24px {{t.radial}}">
+
+        <!-- quest strip -->
+        <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 7px 10px; background: linear-gradient(90deg, {{t.radial}}, rgba(255,255,255,0.03)); border: 1px solid {{t.dk}}; border-radius: 4px">
+          <span style="font-size: 13px; color: {{t.goldB}}; font-weight: 600">กระเป๋าสินค้า</span>
+          <span style="font-size: 12px; color: {{t.faint}}">คลิกช่อง = คัดลอกรหัส · คลิกขวา = แก้ไข · Enter = คัดลอกเมื่อเหลือตัวเดียว</span>
+        </div>
+
+        <!-- search -->
+        <div style="display: flex; gap: 8px; align-items: center">
+          <div style="flex: 1; display: flex; align-items: center; gap: 10px; height: 42px; padding: 0 12px; box-sizing: border-box; background: {{t.panel3}}; border: 2px solid {{t.dk}}; border-radius: 4px">
+            <svg width="16" height="16" viewBox="0 0 8 8" shape-rendering="crispEdges" aria-hidden="true"><rect x="1" y="0" width="3" height="1" fill="{{t.dim}}"></rect><rect x="0" y="1" width="1" height="3" fill="{{t.dim}}"></rect><rect x="4" y="1" width="1" height="3" fill="{{t.dim}}"></rect><rect x="1" y="4" width="3" height="1" fill="{{t.dim}}"></rect><rect x="5" y="5" width="1" height="1" fill="{{t.dim}}"></rect><rect x="6" y="6" width="2" height="2" fill="{{t.dim}}"></rect></svg>
+            <label for="q" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">ค้นหาชื่อหรือรหัสสินค้า</label>
+            <input id="q" value="{{q}}" onInput="{{onSearch}}" onKeyDown="{{onKey}}" placeholder="พิมพ์ชื่อ หรือยิงบาร์โค้ด แล้วกด Enter…" style="flex: 1; min-width: 0; background: transparent; border: none; outline: none; color: {{t.text}}; font-family: 'Sarabun', sans-serif; font-size: 15px">
+            <span style="font-family: 'VT323', monospace; font-size: 16px; color: {{t.faint}}; border: 1px solid {{t.dk}}; padding: 0 6px">SCAN</span>
+          </div>
+          <button class="bev" style="height: 42px; padding: 0 14px; background: linear-gradient(180deg, {{t.act2}}, {{t.act1}}); border-style: solid; border-width: 2px; border-color: {{t.lt}} {{t.dk}} {{t.dk}} {{t.lt}}; border-radius: 5px; color: #fff; font-size: 14px; font-weight: 700; text-shadow: 0 1px 2px rgba(0,0,0,0.6); cursor: pointer">+ เพิ่มสินค้า</button>
+        </div>
+
+        <!-- tabs -->
+        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 5px">
+          <sc-for list="{{tabs}}" as="tb" hint-placeholder-count="6">
+            <button onClick="{{tb.pick}}" style="{{tb.style}}">
+              <span>{{tb.label}}</span>
+              <span style="{{tb.countStyle}}">{{tb.count}}</span>
+            </button>
+          </sc-for>
+          <div style="flex: 1"></div>
+          <span style="font-family: 'VT323', monospace; font-size: 18px; color: {{t.dim}}">{{used}} / {{capacity}} ช่อง</span>
+        </div>
+
+        <!-- grid + card -->
+        <div style="flex: 1; min-height: 0; display: flex; gap: 12px">
+
+          <div style="position: relative; flex: 1; min-width: 0; padding: 10px; box-sizing: border-box; background: {{t.panel3}}; border: 2px solid {{t.dk}}; border-radius: 6px">
+            <sc-if value="{{toastA}}" hint-placeholder-val="{{ false }}">
+              <div class="toast" style="{{toastStyle}}">คัดลอกแล้ว <span style="font-family: 'VT323', monospace; font-size: 22px; line-height: 1">{{toastCode}}</span> · ไปวางใน Sea &amp; Hill ได้เลย</div>
+            </sc-if>
+            <sc-if value="{{toastB}}" hint-placeholder-val="{{ false }}">
+              <div class="toast" style="{{toastStyle}}">คัดลอกแล้ว <span style="font-family: 'VT323', monospace; font-size: 22px; line-height: 1">{{toastCode}}</span> · ไปวางใน Sea &amp; Hill ได้เลย</div>
+            </sc-if>
+            <div style="display: grid; grid-template-columns: repeat(5, 100px); grid-auto-rows: 126px; gap: 8px; justify-content: center">
+              <sc-for list="{{slots}}" as="s" hint-placeholder-count="15">
+                <sc-if value="{{s.empty}}" hint-placeholder-val="{{ true }}">
+                  <div style="{{emptyStyle}}"></div>
+                </sc-if>
+                <sc-if value="{{s.filled}}" hint-placeholder-val="{{ false }}">
+                  <button class="slot" onClick="{{s.pick}}" aria-label="คัดลอกรหัส {{s.name}}" style="{{s.frame}}">
+                    <div style="{{s.tile}}">
+                      <sc-if value="{{s.hasImg}}" hint-placeholder-val="{{ true }}">
+                        <img src="{{s.src}}" alt="" style="{{imgFit}}">
+                      </sc-if>
+                      <sc-if value="{{s.noImg}}" hint-placeholder-val="{{ false }}">
+                        <div style="display: flex; flex-direction: column; align-items: center; gap: 4px">
+                          <svg width="30" height="30" viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true"><rect x="2" y="4" width="12" height="10" fill="{{t.dk}}"></rect><rect x="2" y="4" width="12" height="2" fill="{{t.faint}}"></rect><rect x="6" y="8" width="4" height="3" fill="{{t.panel3}}"></rect></svg>
+                          <span style="font-size: 11px; color: {{t.faint}}">ยังไม่มีรูป</span>
+                        </div>
+                      </sc-if>
+                    </div>
+                    <sc-if value="{{s.isFav}}" hint-placeholder-val="{{ false }}">
+                      <svg style="position: absolute; top: 4px; right: 4px" width="12" height="12" viewBox="0 0 7 7" shape-rendering="crispEdges" aria-hidden="true"><rect x="3" y="0" width="1" height="1" fill="{{t.goldB}}"></rect><rect x="2" y="1" width="3" height="1" fill="{{t.goldB}}"></rect><rect x="0" y="2" width="7" height="1" fill="{{t.goldB}}"></rect><rect x="1" y="3" width="5" height="1" fill="{{t.goldB}}"></rect><rect x="2" y="4" width="3" height="1" fill="{{t.goldB}}"></rect><rect x="1" y="5" width="2" height="1" fill="{{t.goldB}}"></rect><rect x="4" y="5" width="2" height="1" fill="{{t.goldB}}"></rect><rect x="1" y="6" width="1" height="1" fill="{{t.goldB}}"></rect><rect x="5" y="6" width="1" height="1" fill="{{t.goldB}}"></rect></svg>
+                    </sc-if>
+                    <sc-if value="{{s.warn}}" hint-placeholder-val="{{ false }}">
+                      <span style="position: absolute; top: 4px; left: 4px; width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; background: #b45309; border: 1px solid #fde68a; color: #fff; font-size: 11px; font-weight: 700">!</span>
+                    </sc-if>
+                    <sc-if value="{{s.noImg}}" hint-placeholder-val="{{ false }}">
+                      <span style="position: absolute; top: 5px; left: 5px; width: 8px; height: 8px; background: #ef4444; box-shadow: 0 0 6px #ef4444"></span>
+                    </sc-if>
+                    <span style="display: block; width: 100%; padding: 0 4px; box-sizing: border-box; font-size: 12px; line-height: 1.3; color: {{t.text}}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center">{{s.name}}</span>
+                    <sc-if value="{{s.flashA}}" hint-placeholder-val="{{ false }}">
+                      <span class="copied-ring"></span><span class="copied-tag">COPIED</span>
+                    </sc-if>
+                    <sc-if value="{{s.flashB}}" hint-placeholder-val="{{ false }}">
+                      <span class="copied-ring"></span><span class="copied-tag">COPIED</span>
+                    </sc-if>
+                  </button>
+                </sc-if>
+              </sc-for>
+            </div>
+          </div>
+
+          <!-- item card -->
+          <div style="width: 268px; flex-shrink: 0; display: flex; flex-direction: column; background: linear-gradient(180deg, {{t.panel}}, {{t.panel2}}); border-radius: 6px; border-style: solid; border-width: 3px; border-color: {{t.lt}} {{t.dk}} {{t.dk}} {{t.lt}}; box-shadow: 0 0 0 1px #000">
+            <div style="{{rarityStyle}}">
+              <span>{{rarityLabel}}</span>
+              <span style="font-family: 'Press Start 2P', monospace; font-size: 7px; opacity: 0.85">ITEM</span>
+            </div>
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px 12px 8px">
+              <div style="{{bigFrame}}">
+                <sc-if value="{{sel.hasImg}}" hint-placeholder-val="{{ true }}">
+                  <img src="{{sel.src}}" alt="{{sel.name}}" style="{{imgFit}}">
+                </sc-if>
+                <sc-if value="{{sel.noImg}}" hint-placeholder-val="{{ false }}">
+                  <span style="font-size: 13px; color: {{t.faint}}">ยังไม่มีรูป — กดปรับรูปเพื่อใส่</span>
+                </sc-if>
+              </div>
+              <div style="font-size: 17px; font-weight: 700; text-align: center; line-height: 1.3">{{sel.name}}</div>
+              <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 5px">
+                <span style="padding: 1px 8px; font-size: 12px; color: {{t.dim}}; background: {{t.panel3}}; border: 1px solid {{t.dk}}">{{sel.cat}}</span>
+                <span style="{{srcChip}}">{{sel.srcLabel}}</span>
+              </div>
+              <sc-if value="{{sel.warn}}" hint-placeholder-val="{{ false }}">
+                <div style="width: 100%; box-sizing: border-box; padding: 6px 8px; font-size: 12px; line-height: 1.4; color: #fde68a; background: rgba(180,83,9,0.22); border: 1px solid #b45309">{{sel.warnText}}</div>
+              </sc-if>
+            </div>
+            <div style="margin: 0 12px; border-top: 2px dashed {{t.dk}}"></div>
+            <div style="display: flex; flex-direction: column; gap: 4px; padding: 8px 12px">
+              <div style="font-size: 12px; color: {{t.gold}}">รหัสสินค้า</div>
+              <div style="display: flex; align-items: center; gap: 8px">
+                <div style="flex: 1; font-family: 'VT323', monospace; font-size: 30px; line-height: 1; color: {{t.goldB}}; letter-spacing: 1px">{{sel.code}}</div>
+                <button class="bev" onClick="{{copySel}}" style="height: 34px; padding: 0 10px; background: {{t.panel2}}; border-style: solid; border-width: 2px; border-color: {{t.lt}} {{t.dk}} {{t.dk}} {{t.lt}}; border-radius: 4px; color: {{t.text}}; font-size: 13px; cursor: pointer">คัดลอก</button>
+              </div>
+            </div>
+            <div style="margin-top: auto; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding: 0 12px 12px">
+              <a href="Crop.dc.html" class="bev" style="height: 38px; display: flex; align-items: center; justify-content: center; text-decoration: none; background: linear-gradient(180deg, {{t.act2}}, {{t.act1}}); border-style: solid; border-width: 2px; border-color: {{t.lt}} {{t.dk}} {{t.dk}} {{t.lt}}; border-radius: 4px; color: #fff; font-size: 13px; font-weight: 700; text-shadow: 0 1px 2px rgba(0,0,0,0.6)">ปรับรูป</a>
+              <button class="bev" style="height: 38px; background: {{t.panel2}}; border-style: solid; border-width: 2px; border-color: {{t.lt}} {{t.dk}} {{t.dk}} {{t.lt}}; border-radius: 4px; color: {{t.text}}; font-size: 13px; cursor: pointer">แก้ไข</button>
+              <button class="bev" onClick="{{toggleFav}}" style="{{favBtnStyle}}">{{favBtnLabel}}</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- skill bar -->
+    <div style="height: 50px; flex-shrink: 0; margin-top: 10px; display: flex; align-items: center; gap: 6px; padding: 0 10px; background: linear-gradient(0deg, #150e28 55%, rgba(21,14,40,0.4)); border-top: 2px solid {{t.dk}}; box-shadow: 0 -6px 18px rgba(0,0,0,0.45)">
+      <button class="bev" style="{{skillBtn}}">เลือกหลายชิ้น</button>
+      <button class="bev" style="{{skillBtn}}">ย้ายหมวด</button>
+      <button class="bev" style="{{skillBtn}}">ตั้งค่า Cloudflare</button>
+      <button class="bev" style="{{skillBtn}}">สำรองข้อมูล</button>
+      <div style="flex: 1"></div>
+      <span style="font-size: 12px; color: {{t.faint}}">ปิด/เปิดกระเป๋า</span>
+      <span style="font-family: 'Press Start 2P', monospace; font-size: 9px; color: {{t.goldB}}; padding: 5px 6px; background: {{t.panel3}}; border-style: solid; border-width: 2px; border-color: {{t.lt}} {{t.dk}} {{t.dk}} {{t.lt}}">F2</span>
+    </div>
+  </div>
+
+  <!-- ================= POS HERO MINI WIDGET + NEW BAG BUTTON ================= -->
+  <div style="position: absolute; right: 24px; bottom: 24px; display: flex; align-items: stretch">
+    <button class="bev" aria-label="เปิดกระเป๋าสินค้า (F2)" style="width: 54px; height: 86px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; background: linear-gradient(180deg, {{t.act2}}, {{t.act1}}); border-style: solid; border-width: 2px; border-color: {{t.lt}} {{t.dk}} {{t.dk}} {{t.lt}}; border-right: none; box-shadow: 0 0 0 1px #000, 0 0 18px {{t.glow}}; cursor: pointer">
+      <svg width="26" height="26" viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true">
+        <rect x="5" y="1" width="6" height="1" fill="#fff8e6"></rect><rect x="4" y="2" width="1" height="2" fill="#fff8e6"></rect><rect x="11" y="2" width="1" height="2" fill="#fff8e6"></rect>
+        <rect x="2" y="4" width="12" height="10" fill="#7c4a12"></rect><rect x="2" y="4" width="12" height="3" fill="#a8681f"></rect>
+        <rect x="7" y="6" width="2" height="2" fill="#ffe27a"></rect><rect x="2" y="14" width="12" height="1" fill="#2a1808"></rect>
+      </svg>
+      <span style="font-family: 'Press Start 2P', monospace; font-size: 8px; color: #fff8e6">F2</span>
+    </button>
+    <div style="width: 210px; height: 86px; box-sizing: border-box; display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: linear-gradient(180deg, {{t.panel}}, {{t.panel2}}); border-style: solid; border-width: 3px; border-color: {{t.lt}} {{t.dk}} {{t.dk}} {{t.lt}}; border-radius: 0 6px 6px 0; box-shadow: 0 0 0 1px #000, 0 14px 34px rgba(0,0,0,0.55)">
+      <svg width="34" height="34" viewBox="0 0 12 12" shape-rendering="crispEdges" aria-hidden="true"><rect x="3" y="1" width="6" height="1" fill="#b45309"></rect><rect x="2" y="2" width="8" height="8" fill="#f6c453"></rect><rect x="1" y="3" width="1" height="6" fill="#b45309"></rect><rect x="10" y="3" width="1" height="6" fill="#b45309"></rect><rect x="3" y="10" width="6" height="1" fill="#b45309"></rect><rect x="5" y="3" width="2" height="6" fill="#ffe27a"></rect><rect x="3" y="3" width="1" height="2" fill="#fff8e6"></rect></svg>
+      <div style="display: flex; flex-direction: column; min-width: 0">
+        <span style="font-size: 11px; color: {{t.faint}}">สุทธิวันนี้</span>
+        <span style="font-family: 'VT323', monospace; font-size: 30px; line-height: 1; color: {{t.goldB}}">0</span>
+        <span style="font-size: 10px; color: {{t.dim}}; white-space: nowrap">— ยังไม่มีรายการ —</span>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["ทอง-อำพัน","มรกตราตรี","ราชานาวี","เพลิงมังกร"],"default":"ทอง-อำพัน","section":"หน้าตา"},"photoMode":{"editor":"enum","options":["ตัดขอบอัตโนมัติ","รูปดิบ ย่อพอดีช่อง","รูปดิบ ครอปเต็มช่อง (แบบแอปเดิม)"],"default":"ตัดขอบอัตโนมัติ","section":"ทดสอบรูป"},"$preview":{"width":1380,"height":800}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { tab: 'all', q: '', sel: 1, favs: [1, 2], flash: null, tick: 0, toast: null };
+  }
+  themes() {
+    return {
+      'ทอง-อำพัน': { bg1: '#120d09', bg2: '#1c140c', panel: '#241a10', panel2: '#1a130b', panel3: '#140e08', lt: '#ffe27a', dk: '#6b4a12', gold: '#f6c453', goldB: '#ffe27a', text: '#f1e9d2', dim: '#d3c3a0', faint: '#a08f6c', act1: '#b45309', act2: '#f59e0b', glow: 'rgba(246,196,83,0.35)', radial: 'rgba(217,154,27,0.22)' },
+      'มรกตราตรี': { bg1: '#071410', bg2: '#0e211a', panel: '#10241c', panel2: '#0b1a14', panel3: '#08140f', lt: '#7ce3b8', dk: '#1f5c46', gold: '#34d399', goldB: '#6ee7b7', text: '#eafff4', dim: '#b7e6cf', faint: '#7fb79e', act1: '#0f766e', act2: '#14b8a6', glow: 'rgba(52,211,153,0.35)', radial: 'rgba(20,184,166,0.22)' },
+      'ราชานาวี': { bg1: '#060b18', bg2: '#0c1830', panel: '#101f3d', panel2: '#0a1628', panel3: '#081120', lt: '#8ec5ff', dk: '#1e3a6b', gold: '#60a5fa', goldB: '#93c5fd', text: '#eaf2ff', dim: '#b9cfee', faint: '#7f97c2', act1: '#1d4ed8', act2: '#3b82f6', glow: 'rgba(59,130,246,0.35)', radial: 'rgba(37,99,235,0.22)' },
+      'เพลิงมังกร': { bg1: '#170805', bg2: '#24100a', panel: '#2a130c', panel2: '#1c0d08', panel3: '#150a06', lt: '#ffb37a', dk: '#7c2d12', gold: '#fb923c', goldB: '#fdba74', text: '#fff1e8', dim: '#f0c8ab', faint: '#bd8a68', act1: '#b91c1c', act2: '#ef4444', glow: 'rgba(251,146,60,0.35)', radial: 'rgba(194,65,12,0.22)' }
+    };
+  }
+  items() {
+    const B = '/_blob/';
+    const P = {
+      web: { auto: '301835a9457432eb75a6887bd7f0c7f1', raw: '6a0450703786a5f950e96e8b394b0ff9' },
+      phone: { auto: '46c86f594b68dc1142d562e620321c6d', raw: '264c7956bc29109945f08bfa6101aedf' },
+      counter: { auto: '65a1ff2e4d38e8247e1372a0077685b7', raw: 'e708f93739323de03b0d57fc5c771bf3' },
+      dark: { auto: '264c5496dcf7973161408f5868fc98c0', raw: '23dab36d371f56506f483ad3186ef6c9' },
+      sideways: { auto: '11c1b3751850d662fdf6bcbf8d6ce94d', raw: 'd80d90470a562ac35745be03fb5587bc' },
+      closeup: { auto: '56d58872d5e74cb2f26cb0c107d50e50', raw: '4bf329201815d00542c0c7bea249476b' },
+      tall: { auto: '447619dc113230fa4951fd7a5861ec1a', raw: 'b0e08457b88926314a64e47eebb1e0d4' },
+      far: { auto: '491adec8e37f1bdc9dc6dc1531191a4b', raw: 'e90f937bfccaeebd14d561ac72aee882' }
+    };
+    const SH = 'เคลียร์ เมน ดีพโอเชี่ยน', SO = 'สบู่ตราเจดีย์ ก้อนชมพู', CAT = 'ของใช้ส่วนตัว';
+    const rows = [
+      [1, SH, CAT, 'web', true, 'รูปจริง · จากเว็บ', ''],
+      [2, SO, CAT, 'phone', true, 'รูปจริง · มือถือ วางเอียง', ''],
+      [3, SH, CAT, 'counter', false, 'จำลอง · บนเคาน์เตอร์ แนวนอน', ''],
+      [4, SO, CAT, 'dark', false, 'จำลอง · ถ่ายในที่มืด', ''],
+      [5, SO, CAT, 'sideways', false, 'จำลอง · รูปตะแคง', 'รูปตะแคง ระบบหมุนเองไม่ได้ — กด "ปรับรูป" แล้วหมุน 90°'],
+      [6, SH, CAT, 'closeup', false, 'จำลอง · ถ่ายใกล้ เห็นแต่ฉลาก', ''],
+      [7, SH, CAT, 'tall', false, 'จำลอง · รูปผอมสูง', ''],
+      [8, SO, CAT, 'far', false, 'จำลอง · ถ่ายไกล ของเล็ก', 'ถ่ายไกลเกินไป ตัดอัตโนมัติแล้วยังเล็ก — ซูมเพิ่มในหน้า "ปรับรูป"'],
+      [9, '[ชื่อสินค้า A]', 'ทั่วไป', null, false, 'ยังไม่มีรูป', ''],
+      [10, '[ชื่อสินค้า B]', 'ทั่วไป', null, false, 'ยังไม่มีรูป', '']
+    ];
+    const favs = this.state.favs;
+    return rows.map((r) => {
+      const p = r[3] ? P[r[3]] : null;
+      return {
+        id: r[0], name: r[1], cat: r[2], code: String(r[0]).padStart(5, '0'),
+        autoSrc: p ? B + p.auto : '', rawSrc: p ? B + p.raw : '',
+        hasImg: !!p, noImg: !p, isFav: favs.indexOf(r[0]) !== -1,
+        real: r[5].indexOf('รูปจริง') === 0, srcLabel: r[5], warn: !!r[6], warnText: r[6]
+      };
+    });
+  }
+  copy(item) {
+    try { navigator.clipboard && navigator.clipboard.writeText(item.code); } catch (e) {}
+    clearTimeout(this._tt);
+    this.setState({ sel: item.id, flash: item.id, tick: this.state.tick + 1, toast: item.code });
+    this._tt = setTimeout(() => this.setState({ flash: null, toast: null }), 1800);
+  }
+  renderVals() {
+    const T = this.themes();
+    const t = T[this.props.theme] || T['ทอง-อำพัน'];
+    const mode = this.props.photoMode || 'ตัดขอบอัตโนมัติ';
+    const isAuto = mode === 'ตัดขอบอัตโนมัติ';
+    const isCover = mode.indexOf('ครอป') !== -1;
+    const all = this.items();
+    const { tab, q, sel, flash, tick } = this.state;
+
+    const defs = [
+      { id: 'all', label: 'ทั้งหมด', f: () => true },
+      { id: 'cat1', label: 'ของใช้ส่วนตัว', f: (i) => i.cat === 'ของใช้ส่วนตัว' },
+      { id: 'cat2', label: 'ทั่วไป', f: (i) => i.cat === 'ทั่วไป' },
+      { id: 'fav', label: '★ ของโปรด', f: (i) => i.isFav },
+      { id: 'noimg', label: 'ยังไม่มีรูป', f: (i) => i.noImg, alert: true },
+      { id: 'warn', label: 'ต้องตรวจรูป', f: (i) => i.warn, alert: true }
+    ];
+    const tabs = defs.map((d) => {
+      const active = d.id === tab;
+      const style = 'display:flex;align-items:center;gap:6px;height:32px;padding:0 10px;border-radius:4px;font-size:13px;cursor:pointer;' +
+        (active ? 'background:linear-gradient(180deg,' + t.act2 + ',' + t.act1 + ');color:#fff;font-weight:700;border:1px solid ' + t.goldB + ';'
+                : 'background:' + t.panel2 + ';color:' + (d.alert ? '#fca5a5' : t.dim) + ';border:1px solid ' + t.dk + ';');
+      const countStyle = 'min-width:18px;padding:0 5px;border-radius:9px;font-size:11px;line-height:17px;text-align:center;' +
+        (active ? 'background:rgba(0,0,0,0.25);' : 'background:rgba(255,255,255,0.12);');
+      return { label: d.label, count: all.filter(d.f).length, style, countStyle, pick: () => this.setState({ tab: d.id }) };
+    });
+
+    const def = defs.find((d) => d.id === tab) || defs[0];
+    const ql = q.trim().toLowerCase();
+    let list = all.filter(def.f);
+    if (ql) list = list.filter((i) => i.name.toLowerCase().indexOf(ql) !== -1 || i.code.indexOf(ql) !== -1);
+
+    const capacity = 15;
+    const tileBg = isAuto ? '#f7f3ea' : t.panel3;
+    const bevel = 'border-style:solid;border-width:2px;border-color:' + t.lt + ' ' + t.dk + ' ' + t.dk + ' ' + t.lt + ';';
+    const slots = list.slice(0, capacity).map((i) => {
+      const isSel = i.id === sel;
+      let frame = 'position:relative;width:100px;height:126px;box-sizing:border-box;padding:4px 4px 3px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;border-radius:3px;background:' + t.panel2 + ';';
+      if (isSel) frame += 'border:2px solid ' + t.goldB + ';box-shadow:0 0 0 2px ' + t.goldB + ',0 0 18px ' + t.glow + ';z-index:1;';
+      else if (i.isFav) frame += 'border:2px solid ' + t.gold + ';box-shadow:0 0 10px ' + t.glow + ';';
+      else frame += bevel;
+      const tile = 'width:88px;height:88px;flex-shrink:0;display:flex;align-items:center;justify-content:center;overflow:hidden;' +
+        (i.hasImg ? 'background:' + tileBg + ';' : 'background:' + t.panel3 + ';border:1px dashed ' + t.dk + ';box-sizing:border-box;');
+      return Object.assign({}, i, {
+        filled: true, empty: false, frame, tile,
+        src: isAuto ? i.autoSrc : i.rawSrc,
+        flashA: flash === i.id && tick % 2 === 0, flashB: flash === i.id && tick % 2 === 1,
+        pick: () => this.copy(i)
+      });
+    });
+    while (slots.length < capacity) slots.push({ empty: true, filled: false });
+
+    const s0 = all.find((i) => i.id === sel) || all[0];
+    const selItem = Object.assign({}, s0, { src: isAuto ? s0.autoSrc : s0.rawSrc });
+    const fav = selItem.isFav;
+
+    return {
+      t, tabs, slots, q, capacity, used: list.length,
+      emptyStyle: 'width:100px;height:126px;box-sizing:border-box;background:' + t.panel3 + ';border:2px solid rgba(255,255,255,0.04);box-shadow:inset 2px 2px 0 rgba(0,0,0,0.5);border-radius:3px;',
+      imgFit: 'width:100%;height:100%;display:block;object-fit:' + (isCover ? 'cover' : 'contain') + ';',
+      toastA: !!this.state.toast && tick % 2 === 0, toastB: !!this.state.toast && tick % 2 === 1, toastCode: this.state.toast,
+      toastStyle: 'position:absolute;left:50%;top:-14px;transform:translateX(-50%);z-index:5;white-space:nowrap;display:flex;align-items:center;gap:6px;padding:4px 12px;font-size:13px;font-weight:600;color:#dcfce7;background:#14532d;border:2px solid #4ade80;box-shadow:0 0 0 2px #000,0 0 16px rgba(74,222,128,0.5);',
+      sel: selItem,
+      rarityLabel: fav ? '★ ของโปรด · LEGENDARY' : 'ไอเทมทั่วไป · COMMON',
+      rarityStyle: 'display:flex;justify-content:space-between;align-items:center;padding:6px 12px;font-size:12px;font-weight:700;' +
+        (fav ? 'background:linear-gradient(90deg,' + t.act1 + ',' + t.act2 + ');color:#fff8e6;border-bottom:2px solid ' + t.goldB + ';' : 'background:' + t.panel3 + ';color:' + t.dim + ';border-bottom:2px solid ' + t.dk + ';'),
+      bigFrame: 'width:224px;height:224px;box-sizing:border-box;display:flex;align-items:center;justify-content:center;overflow:hidden;background:' + (selItem.hasImg ? tileBg : t.panel3) + ';' +
+        (fav ? 'border:3px solid ' + t.gold + ';box-shadow:0 0 0 2px #000,0 0 20px ' + t.glow + ';' : 'border:3px solid ' + t.dk + ';box-shadow:0 0 0 2px #000;'),
+      srcChip: 'padding:1px 8px;font-size:12px;' + (selItem.real ? 'color:#bbf7d0;background:rgba(21,128,61,0.25);border:1px solid #15803d;' : selItem.noImg ? 'color:#fecaca;background:rgba(185,28,28,0.2);border:1px solid #b91c1c;' : 'color:#fde68a;background:rgba(180,83,9,0.2);border:1px solid #b45309;'),
+      favBtnLabel: fav ? '★ เอาออก' : '☆ ปักดาว',
+      favBtnStyle: 'height:38px;border-radius:4px;font-size:13px;cursor:pointer;' + (fav ? 'background:' + t.panel3 + ';border:2px solid ' + t.goldB + ';color:' + t.goldB + ';' : 'background:' + t.panel2 + ';' + bevel + 'color:' + t.text + ';'),
+      skillBtn: 'height:34px;padding:0 12px;border-radius:5px;font-size:13px;cursor:pointer;color:' + t.text + ';background:' + t.panel2 + ';' + bevel + 'box-shadow:0 2px 0 rgba(0,0,0,0.4);',
+      onSearch: (e) => this.setState({ q: e.target.value }),
+      onKey: (e) => { if (e.key === 'Enter' && list.length === 1) this.copy(list[0]); },
+      copySel: () => this.copy(s0),
+      toggleFav: () => {
+        const f = this.state.favs;
+        this.setState({ favs: f.indexOf(s0.id) !== -1 ? f.filter((x) => x !== s0.id) : f.concat([s0.id]) });
+      }
+    };
+  }
+}
+</script>
+</body>
+</html>

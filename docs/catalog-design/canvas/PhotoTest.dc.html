@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<title>ทดสอบรูปสินค้า — 3 วิธีแสดงผล</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&amp;family=Press+Start+2P&amp;family=VT323&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#120d09}
+a{color:#f6c453}a:hover{color:#ffe27a}
+</style>
+</helmet>
+<div style="width: 1320px; height: 760px; box-sizing: border-box; padding: 28px 32px; display: flex; flex-direction: column; gap: 14px; background: #120d09; background-image: radial-gradient(circle at 15% 0%, rgba(217,154,27,0.22), transparent 45%), linear-gradient(180deg, #120d09, #1c140c); font-family: 'Sarabun', 'Noto Sans Thai', Tahoma, sans-serif; color: #f1e9d2">
+
+  <div style="display: flex; align-items: baseline; gap: 14px">
+    <span style="font-family: 'Press Start 2P', monospace; font-size: 13px; color: #ffe27a; text-shadow: 0 0 8px rgba(246,196,83,0.5)">PHOTO TEST</span>
+    <span style="font-size: 18px; font-weight: 700">รูปสินค้าแบบต่างๆ ในช่องกระเป๋า — เพี้ยนไหม?</span>
+  </div>
+  <div style="font-size: 14px; color: #d3c3a0">2 คอลัมน์แรกเป็นรูปจริงที่ส่งมา · อีก 6 คอลัมน์จำลองจากรูปจริงสองรูปนั้น ให้เหมือนปัญหาที่เจอบ่อยตอนถ่ายรูปสินค้า</div>
+
+  <div style="display: grid; grid-template-columns: 190px repeat(8, 122px); column-gap: 10px; row-gap: 10px; align-items: center">
+    <div></div>
+    <sc-for list="{{cols}}" as="c" hint-placeholder-count="8">
+      <div style="display: flex; flex-direction: column; gap: 3px; align-self: end">
+        <span style="{{c.chip}}">{{c.kind}}</span>
+        <span style="font-size: 13px; line-height: 1.3; color: #f1e9d2">{{c.label}}</span>
+      </div>
+    </sc-for>
+
+    <sc-for list="{{rows}}" as="r" hint-placeholder-count="3">
+      <div style="{{r.head}}">
+        <span style="font-size: 15px; font-weight: 700; color: {{r.color}}">{{r.title}}</span>
+        <span style="font-size: 12px; line-height: 1.4; color: #a08f6c">{{r.sub}}</span>
+      </div>
+      <sc-for list="{{r.cells}}" as="x" hint-placeholder-count="8">
+        <div style="width: 122px; height: 122px; box-sizing: border-box; padding: 4px; background: #1a130b; border-style: solid; border-width: 2px; border-color: #ffe27a #6b4a12 #6b4a12 #ffe27a; border-radius: 3px">
+          <div style="{{x.tile}}">
+            <img src="{{x.src}}" alt="" style="{{x.fit}}">
+          </div>
+        </div>
+      </sc-for>
+    </sc-for>
+
+    <div style="font-size: 13px; color: #a08f6c; text-align: right; padding-right: 6px">ผลของแบบใหม่</div>
+    <sc-for list="{{verdicts}}" as="v" hint-placeholder-count="8">
+      <div style="{{v.style}}">{{v.text}}</div>
+    </sc-for>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1320,"height":760}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const B = '/_blob/';
+    const C = [
+      ['รูปจริง', 'จากเว็บ พื้นขาว ของเล็ก', '301835a9457432eb75a6887bd7f0c7f1', '6a0450703786a5f950e96e8b394b0ff9', 'ok', 'ดี'],
+      ['รูปจริง', 'มือถือ บนโต๊ะ วางเอียง', '46c86f594b68dc1142d562e620321c6d', '264c7956bc29109945f08bfa6101aedf', 'ok', 'ดี (ยังเอียงนิด)'],
+      ['จำลอง', 'บนเคาน์เตอร์ แนวนอน', '65a1ff2e4d38e8247e1372a0077685b7', 'e708f93739323de03b0d57fc5c771bf3', 'ok', 'ดี (มีพื้นติดนิด)'],
+      ['จำลอง', 'ถ่ายในที่มืด', '264c5496dcf7973161408f5868fc98c0', '23dab36d371f56506f483ad3186ef6c9', 'ok', 'ดี เพิ่มแสงให้'],
+      ['จำลอง', 'รูปตะแคง', '11c1b3751850d662fdf6bcbf8d6ce94d', 'd80d90470a562ac35745be03fb5587bc', 'fix', 'ต้องหมุนเอง'],
+      ['จำลอง', 'ใกล้ เห็นแต่ฉลาก', '56d58872d5e74cb2f26cb0c107d50e50', '4bf329201815d00542c0c7bea249476b', 'ok', 'ดี ไม่ตัดเพิ่ม'],
+      ['จำลอง', 'ผอมสูง', '447619dc113230fa4951fd7a5861ec1a', 'b0e08457b88926314a64e47eebb1e0d4', 'ok', 'ดี'],
+      ['จำลอง', 'ถ่ายไกล ของเล็ก', '491adec8e37f1bdc9dc6dc1531191a4b', 'e90f937bfccaeebd14d561ac72aee882', 'fix', 'ควรซูมเพิ่มเอง']
+    ];
+    const cols = C.map((c) => ({
+      kind: c[0], label: c[1],
+      chip: 'align-self:flex-start;padding:0 6px;font-size:11px;' + (c[0] === 'รูปจริง' ? 'color:#bbf7d0;background:rgba(21,128,61,0.25);border:1px solid #15803d;' : 'color:#fde68a;background:rgba(180,83,9,0.2);border:1px solid #b45309;')
+    }));
+    const mk = (title, sub, color, useAuto, fit, tileBg, isNew) => ({
+      title, sub, color,
+      head: 'display:flex;flex-direction:column;gap:3px;padding:8px 10px;height:122px;box-sizing:border-box;justify-content:center;' + (isNew ? 'background:rgba(217,154,27,0.18);border:2px solid #f6c453;' : 'background:#1a130b;border:1px solid #6b4a12;'),
+      cells: C.map((c) => ({
+        src: B + (useAuto ? c[2] : c[3]),
+        tile: 'width:100%;height:100%;overflow:hidden;display:flex;align-items:center;justify-content:center;background:' + tileBg + ';',
+        fit: 'width:100%;height:100%;display:block;object-fit:' + fit + ';'
+      }))
+    });
+    const rows = [
+      mk('แบบแอปเดิม', 'ครอปรูปดิบให้เต็มช่อง — ของถูกตัดหาย หรือเล็กจนดูไม่ออก', '#fca5a5', false, 'cover', '#140e08', false),
+      mk('รูปดิบ ย่อพอดีช่อง', 'ไม่ตัดอะไร — เห็นทั้งรูป แต่ขนาดและพื้นหลังไม่เท่ากัน', '#d3c3a0', false, 'contain', '#140e08', false),
+      mk('ตัดขอบอัตโนมัติ (ใหม่)', 'หาตัวสินค้า ตัดพื้นทิ้ง ปรับแสง วางกลางพื้นครีมขนาดเท่ากัน', '#ffe27a', true, 'contain', '#f7f3ea', true)
+    ];
+    const verdicts = C.map((c) => ({
+      text: (c[4] === 'ok' ? '✓ ' : '! ') + c[5],
+      style: 'font-size:13px;font-weight:600;text-align:center;padding:4px 2px;' + (c[4] === 'ok' ? 'color:#86efac;background:rgba(21,128,61,0.18);border:1px solid #15803d;' : 'color:#fde68a;background:rgba(180,83,9,0.25);border:1px solid #b45309;')
+    }));
+    return { cols, rows, verdicts };
+  }
+}
+</script>
+</body>
+</html>
