@@ -41,7 +41,17 @@ function inDateRange(settings, now = new Date()) {
 function matchesReceipt(docName, filter) {
   const name = String(docName || '').toLowerCase();
   const terms = String(filter || '').split(',').map((t) => t.trim().toLowerCase()).filter(Boolean);
-  return terms.some((t) => name.includes(t));
+  // ตรงทั้งชื่อเท่านั้น (ไม่งั้น "Local Downlevel Document" จะถูกนับเป็นใบเสร็จเพราะมีคำว่า document) —
+  // ใส่ * หน้า/หลังเพื่อให้หมายถึง "ขึ้นต้นด้วย / ลงท้ายด้วย / มีคำนี้" เช่น Sea*  *receipt  *Hill*
+  return terms.some((t) => {
+    const star0 = t.startsWith('*'), star1 = t.endsWith('*') && t.length > 1;
+    const core = t.slice(star0 ? 1 : 0, star1 ? t.length - 1 : t.length);
+    if (!core) return false;
+    if (star0 && star1) return name.includes(core);
+    if (star0) return name.endsWith(core);
+    if (star1) return name.startsWith(core);
+    return name === core;
+  });
 }
 
 // ตัดสินใจว่างานพิมพ์ที่จบแล้วต้องทำอะไร: 'skip' | 'cut' | 'slip'
@@ -66,15 +76,19 @@ function pickIndex(fortunes, settings, randomInt = crypto.randomInt) {
 }
 
 // จำ job id ที่จัดการแล้ว N รายการล่าสุด (กันพิมพ์ซ้ำ)
-function makeDedup(limit = 200) {
-  const order = [];
-  const set = new Set();
+// เลขงานของ Windows วนกลับ (เห็น 255 → 1) จึงจำ id แค่ ttlMs (ค่าเริ่มต้น 10 นาที) ไม่งั้นงานใหม่ที่ id ซ้ำจะถูกข้าม
+function makeDedup(limit = 200, ttlMs = 10 * 60 * 1000, nowFn = Date.now) {
+  const seenAt = new Map();
   return {
-    seen(id) { return set.has(id); },
+    seen(id) {
+      const t = seenAt.get(id);
+      if (t === undefined) return false;
+      if (nowFn() - t > ttlMs) { seenAt.delete(id); return false; }
+      return true;
+    },
     add(id) {
-      if (set.has(id)) return;
-      set.add(id); order.push(id);
-      while (order.length > limit) set.delete(order.shift());
+      seenAt.delete(id); seenAt.set(id, nowFn());
+      while (seenAt.size > limit) seenAt.delete(seenAt.keys().next().value);
     }
   };
 }

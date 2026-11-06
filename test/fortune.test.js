@@ -31,6 +31,13 @@ const on = logic.normalizeSettings({ mode: 'on' });
 assert.strictEqual(logic.decideAction('document', on), 'slip');
 assert.strictEqual(logic.decideAction('POS Hero Receipt', on), 'skip');
 assert.strictEqual(logic.decideAction('Z-Report', on), 'cut');
+assert.strictEqual(logic.decideAction('Local Downlevel Document', on), 'cut'); // มีคำว่า document แต่ไม่ใช่ใบเสร็จ
+assert.strictEqual(logic.decideAction('DOCUMENT', on), 'slip');
+assert.strictEqual(logic.matchesReceipt('Sea & Hill #1', 'Sea*'), true);
+assert.strictEqual(logic.matchesReceipt('my receipt', '*receipt'), true);
+assert.strictEqual(logic.matchesReceipt('my receipt x', '*receipt'), false);
+assert.strictEqual(logic.matchesReceipt('a Hill b', '*hill*'), true);
+assert.strictEqual(logic.matchesReceipt('x', '*'), false);
 assert.strictEqual(logic.decideAction('Z-Report', { ...on, cutOthers: false }), 'skip');
 assert.strictEqual(logic.decideAction('document', { ...on, mode: 'record' }), 'skip');
 assert.strictEqual(logic.decideAction('document', { ...on, mode: 'off' }), 'skip');
@@ -44,9 +51,12 @@ assert.strictEqual(logic.decideAction('document', { ...on, startDate: '2027-01-1
 assert.strictEqual(logic.normalizeSettings({ mode: 'zzz' }).mode, 'off');
 assert.strictEqual(logic.normalizeSettings({ startDate: 'bad' }).startDate, '');
 assert.strictEqual(logic.DEFAULT_SETTINGS.skipUnlucky, true);
-const d = logic.makeDedup(200);
+let clock = 0;
+const d = logic.makeDedup(200, 600000, () => clock);
 for (let i = 0; i < 250; i++) d.add(i);
 assert.strictEqual(d.seen(0), false); assert.strictEqual(d.seen(249), true); assert.strictEqual(d.seen(50), true);
+clock = 600001; // เลขงานวนกลับหลังผ่านไปนาน → ต้องไม่ถูกมองว่าซ้ำ
+assert.strictEqual(d.seen(249), false);
 
 // ---- buildEscPosRaster: ค่าเริ่มต้นต้องได้ไบต์เหมือนฉบับเดิมใน HEAD ทุกไบต์ ----
 function extractFn(src) {
