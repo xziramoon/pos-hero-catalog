@@ -10,7 +10,7 @@ const DEFAULT_SETTINGS = Object.freeze({
   showZh: true,            // ใส่กลอนจีน
   showTh: true,            // ใส่กลอนแปลไทย
   printerName: '',         // ว่าง = เครื่องพิมพ์เริ่มต้นของ Windows
-  docFilter: 'Sea & Hill', // ชื่อเอกสารที่มีข้อความนี้ = ใบเสร็จ Sea & Hill (คั่นหลายคำด้วย ,)
+  docFilter: 'document',  // ชื่อเอกสารที่มีข้อความนี้ = ใบเสร็จ (ระบบ POS ร้านส่งงานชื่อ "document") (คั่นหลายคำด้วย ,)
   startDate: '',           // YYYY-MM-DD ว่าง = ไม่จำกัด
   endDate: '',
   cutOthers: true,         // งานอื่นที่จบ → ส่งคำสั่งตัดกระดาษให้ (เพราะไดรเวอร์ตั้ง No Cut)
@@ -118,9 +118,11 @@ function buildReportText(lines, meta = {}) {
   }
   const errors = events.filter((o) => o.e === 'error').slice(-5);
   if (errors.length) { out.push(''); out.push('ข้อผิดพลาดล่าสุด:'); errors.forEach((o) => out.push('  ' + o.t + ' ' + o.msg)); }
+  const notes = lines.filter((l) => l.startsWith('#')).slice(-10);
+  if (notes.length) { out.push(''); out.push('หมายเหตุจากโปรแกรม:'); notes.forEach((l) => out.push('  ' + l)); }
   out.push('');
   out.push('เหตุการณ์ล่าสุด 30 รายการ:');
-  events.filter((o) => o.e !== 'hb').slice(-30).forEach((o) => out.push('  ' + [o.t, o.e, o.id, o.doc, o.status || o.lastStatus || ''].filter((x) => x !== undefined).join(' | ')));
+  events.filter((o) => o.e !== 'hb' && o.e !== 'start').slice(-30).forEach((o) => out.push('  ' + [o.t, o.e, o.id, o.doc, o.status || o.lastStatus || ''].filter((x) => x !== undefined).join(' | ')));
   return out.join('\n');
 }
 

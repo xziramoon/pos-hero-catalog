@@ -164,10 +164,13 @@ async function startWatcher() {
   });
   child.stderr.on('data', (d) => log(`# stderr: ${String(d).trim().slice(0, 300)}`));
   child.on('exit', (code) => {
+    // ตัวที่เราสั่งปิดเองเพื่อแทนที่ (stopWatcher/startWatcher) ห้ามกลับมาสั่งรีสตาร์ท ไม่งั้นวนฆ่า-เปิดใหม่ทุก 2 วินาที
+    if (child.replacedByUs) return;
     if (watcher === child) watcher = null;
     if (stopping || settings.mode === 'off') return;
+    if (restartTimer) return;
     log(`# watcher exited (${code}) → restart`);
-    restartTimer = setTimeout(startWatcher, WATCHER_RESTART_MS);
+    restartTimer = setTimeout(() => { restartTimer = null; startWatcher().catch(() => {}); }, WATCHER_RESTART_MS);
   });
   lastHeartbeat = Date.now();
   if (!heartbeatTimer) {
@@ -184,7 +187,7 @@ async function startWatcher() {
 function stopWatcher(final = true) {
   if (final) stopping = true;
   if (restartTimer) { clearTimeout(restartTimer); restartTimer = null; }
-  if (watcher) { try { watcher.kill(); } catch (e) { /* ignore */ } watcher = null; }
+  if (watcher) { watcher.replacedByUs = true; try { watcher.kill(); } catch (e) { /* ignore */ } watcher = null; }
   if (final && heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null; }
 }
 
