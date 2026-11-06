@@ -83,7 +83,49 @@ const FEED_AND_CUT = Buffer.from([0x1b, 0x64, 0x02, 0x1d, 0x56, 0x41, 0x00]); //
 
 const LEVEL_LABEL = { 上签: '上签 · ดี', 中签: '中签 · กลาง', 下签: '下签 · รอจังหวะ' };
 
+// สรุปไฟล์บันทึกงานพิมพ์เป็นข้อความสั้นๆ สำหรับส่งให้คนช่วยดู (ไม่มีข้อมูลลูกค้า มีแค่ชื่อเอกสาร/สถานะ/เวลา)
+function buildReportText(lines, meta = {}) {
+  const events = [];
+  for (const l of lines) { try { const o = JSON.parse(l); if (o && o.e) events.push(o); } catch (e) { /* บรรทัดหมายเหตุ (#...) */ } }
+  const jobs = new Map(); // id → { doc, addedAt, endAt, endEvent, lastStatus }
+  for (const o of events) {
+    if (o.id === undefined) continue;
+    const j = jobs.get(o.id) || { id: o.id, doc: o.doc || '', statuses: new Set() };
+    if (o.doc) j.doc = o.doc;
+    if (o.status) j.statuses.add(o.status);
+    if (o.lastStatus) j.statuses.add(o.lastStatus);
+    if (o.e === 'added') j.addedAt = Date.parse(o.t);
+    if ((o.e === 'done' || o.e === 'gone') && !j.endAt) { j.endAt = Date.parse(o.t); j.endEvent = o.e; }
+    jobs.set(o.id, j);
+  }
+  const byDoc = new Map();
+  for (const j of jobs.values()) {
+    const g = byDoc.get(j.doc) || { n: 0, secs: [], statuses: new Set() };
+    g.n++;
+    if (j.addedAt && j.endAt) g.secs.push((j.endAt - j.addedAt) / 1000);
+    j.statuses.forEach((s) => g.statuses.add(s));
+    byDoc.set(j.doc, g);
+  }
+  const out = [];
+  out.push('POS Hero — รายงานงานพิมพ์ (เซียมซี)');
+  for (const [k, v] of Object.entries(meta)) out.push(k + ': ' + v);
+  out.push('จำนวนงานในไฟล์บันทึก: ' + jobs.size);
+  out.push('');
+  out.push('ชื่อเอกสาร → จำนวนครั้ง | เวลาเข้าคิวถึงจบ (วินาที) | สถานะที่เจอ');
+  for (const [doc, g] of [...byDoc.entries()].sort((a, b) => b[1].n - a[1].n)) {
+    const t = g.secs.length ? g.secs.map((x) => x.toFixed(1)).slice(-5).join(', ') : '-';
+    out.push('"' + doc + '" → ' + g.n + ' | ' + t + ' | ' + [...g.statuses].join('/'));
+  }
+  const errors = events.filter((o) => o.e === 'error').slice(-5);
+  if (errors.length) { out.push(''); out.push('ข้อผิดพลาดล่าสุด:'); errors.forEach((o) => out.push('  ' + o.t + ' ' + o.msg)); }
+  out.push('');
+  out.push('เหตุการณ์ล่าสุด 30 รายการ:');
+  events.filter((o) => o.e !== 'hb').slice(-30).forEach((o) => out.push('  ' + [o.t, o.e, o.id, o.doc, o.status || o.lastStatus || ''].filter((x) => x !== undefined).join(' | ')));
+  return out.join('\n');
+}
+
 module.exports = {
+  buildReportText,
   OWN_DOC_NAME, DEFAULT_SETTINGS, normalizeSettings, localDateStr, inDateRange, matchesReceipt,
   decideAction, allowedIndexes, pickIndex, makeDedup, FEED_AND_CUT, LEVEL_LABEL
 };
