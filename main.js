@@ -17,6 +17,10 @@ try {
   catalog.registerSchemes();
 } catch (e) { console.warn('[catalog] load failed:', e && e.message); catalog = null; }
 
+// เซียมซีต่อท้ายใบเสร็จ — โมดูลแยกใน ./fortune; พังตรงนี้ต้องไม่กระทบ POS
+let fortune = null;
+try { fortune = require('./fortune/fortune-main'); } catch (e) { console.warn('[fortune] load failed:', e && e.message); fortune = null; }
+
 autoUpdater.autoDownload = true;
 autoUpdater.autoInstallOnAppQuit = true;
 
@@ -202,6 +206,7 @@ function refreshTrayMenu() {
     { type: 'separator' },
     { label: '📱 ข้อมูลเชื่อมต่อมือถือ (IP/Token)', click: () => showRelayInfoDialog() },
     { type: 'separator' },
+    ...(fortune ? (() => { try { return fortune.trayItems(); } catch (e) { return []; } })() : []),
     { label: '🔄 ตรวจสอบอัปเดต', click: () => {
       manualUpdateCheck = true;
       // The 'error' event (below) already shows a notification and covers
@@ -330,6 +335,10 @@ app.whenReady().then(() => {
   startNetworkWatcher();
 
   try {
+    if (fortune) fortune.init({ app, getMainWindow: () => mainWindow, buildRaster: buildEscPosRaster, onChange: () => { try { refreshTrayMenu(); } catch (e) { /* ignore */ } } });
+  } catch (e) { console.warn('[fortune] init failed:', e && e.message); }
+
+  try {
     if (catalog) catalog.init({ app, getMainWindow: () => mainWindow, userDataDir: app.getPath('userData'), config: {} });
   } catch (e) { console.warn('[catalog] init failed:', e && e.message); }
 
@@ -423,7 +432,10 @@ app.on('window-all-closed', () => {
 // exactly as many dot-rows as the image actually has and nothing more.
 const RECEIPT_DOT_WIDTH = 576; // 72mm printable width (80mm roll - 4mm margins/side) at 203dpi; /8 = 72 exactly, so byte-aligned with no partial-byte row padding
 
-function buildEscPosRaster(bitmapBGRA, widthPx, heightPx) {
+// opts.init / opts.finish (ค่าเริ่มต้น true = ไบต์ใบเสร็จเดิมทุกไบต์): เซียมซีต่อท้ายใบเสร็จส่ง false ทั้งคู่
+// เพื่อไม่ใส่ ESC @ ข้างหน้า และไม่ใส่ feed/ตัดข้างหลัง (fortune-main ต่อคำสั่งตัดเอง)
+function buildEscPosRaster(bitmapBGRA, widthPx, heightPx, opts = {}) {
+  const { init = true, finish = true } = opts;
   const bytesPerRow = Math.ceil(widthPx / 8);
   // Bands of 256 dot-rows mirror how the OEM driver's own raster output was
   // structured (observed while diagnosing the page-size bug) — keeps each
@@ -435,7 +447,7 @@ function buildEscPosRaster(bitmapBGRA, widthPx, heightPx) {
   // reliably split those two, not handle real grayscale/anti-aliased input.
   const LUMINANCE_THRESHOLD = 160;
 
-  const chunks = [Buffer.from([0x1b, 0x40])]; // ESC @ — initialize printer
+  const chunks = init ? [Buffer.from([0x1b, 0x40])] : []; // ESC @ — initialize printer
 
   for (let bandStart = 0; bandStart < heightPx; bandStart += BAND_HEIGHT) {
     const bandHeight = Math.min(BAND_HEIGHT, heightPx - bandStart);
@@ -457,8 +469,10 @@ function buildEscPosRaster(bitmapBGRA, widthPx, heightPx) {
     chunks.push(raster);
   }
 
-  chunks.push(Buffer.from([0x1b, 0x64, 0x02])); // ESC d 2 — feed 2 lines, a small cut margin
-  chunks.push(Buffer.from([0x1d, 0x56, 0x41, 0x00])); // GS V 65 0 — full cut, no extra feed (matches the OEM driver's own cut command)
+  if (finish) {
+    chunks.push(Buffer.from([0x1b, 0x64, 0x02])); // ESC d 2 — feed 2 lines, a small cut margin
+    chunks.push(Buffer.from([0x1d, 0x56, 0x41, 0x00])); // GS V 65 0 — full cut, no extra feed (matches the OEM driver's own cut command)
+  }
   return Buffer.concat(chunks);
 }
 
@@ -551,6 +565,7 @@ ipcMain.handle('print:raw', async (_event, arg) => {
 });
 
 app.on('before-quit', () => {
+  try { if (fortune) fortune.shutdown(); } catch (e) { /* ignore */ }
   isQuitting = true;
 });
 

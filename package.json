@@ -38,16 +38,19 @@
       "preload.js",
       "preload-catalog.js",
       "catalog/**/*",
+      "fortune/**/*",
       "renderer/**/*",
       "build/icon.ico",
       "build/tray.png",
       "build/raw-print.ps1",
       "!renderer/catalog/dev/**",
       "!renderer/catalog/image/tools/**",
-      "!catalog/tools/**"
+      "!catalog/tools/**",
+      "!fortune/tools/**"
     ],
     "asarUnpack": [
-      "build/raw-print.ps1"
+      "build/raw-print.ps1",
+      "fortune/job-watcher.ps1"
     ],
     "publish": {
       "provider": "github",
