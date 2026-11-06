@@ -71,3 +71,15 @@ assert.deepStrictEqual([...slip.subarray(0, 3)], [0x1d, 0x76, 0x30]);
 assert.strictEqual(slip.length, cur.length - 2 - 7);
 
 console.log('fortune.test.js OK' + (original ? '' : ' (skipped HEAD compare)'));
+
+// ---- รายงานงานพิมพ์ ----
+{
+  const t0 = '2026-11-06T08:06:00.0000000+07:00', t1 = '2026-11-06T08:06:03.5000000+07:00';
+  const rep = logic.buildReportText([
+    JSON.stringify({ e: 'added', id: 7, doc: 'Receipt POS01261106-00043', status: 'Spooling', t: t0 }),
+    JSON.stringify({ e: 'gone', id: 7, doc: 'Receipt POS01261106-00043', lastStatus: 'Printing', done: false, t: t1 }),
+    '# slip failed', 'not json'
+  ], { 'โหมด': 'record' });
+  assert.ok(rep.includes('Receipt POS01261106-00043') && rep.includes('3.5') && rep.includes('โหมด: record'));
+  console.log('report OK');
+}

@@ -53,6 +53,7 @@
 
 <button id="save">💾 บันทึก</button>
 <button id="test">🖨️ ทดลองพิมพ์เซียมซี</button>
+<button id="report">📤 ส่งรายงานงานพิมพ์</button>
 <div id="status"></div>
 <div class="hint" id="logpath"></div>
 
@@ -103,6 +104,12 @@
     await window.fortuneApi.setSettings(collect());
     const r = await window.fortuneApi.testPrint();
     setStatus(r.success ? `พิมพ์ใบที่ ${r.n} แล้ว` : `พิมพ์ไม่สำเร็จ: ${r.reason}`, r.success);
+  };
+  $('report').onclick = async () => {
+    const r = await window.fortuneApi.exportReport();
+    if (!r.success) return setStatus(r.reason, false);
+    setStatus('คัดลอกรายงานลงคลิปบอร์ดแล้ว (' + r.chars + ' ตัวอักษร) — กดวาง (Ctrl+V) ในแชทได้เลย' +
+      (r.drive ? ' · และคัดลอกเข้า Google Drive แล้ว: ' + r.drive : ' · ไฟล์อยู่ในโฟลเดอร์ที่เปิดขึ้นมา'), true);
   };
   window.fortuneApi.onState((st) => render(st, true));
   window.fortuneApi.getState().then((st) => render(st, false));

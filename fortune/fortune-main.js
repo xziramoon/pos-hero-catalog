@@ -4,7 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const { spawn, execFile } = require('child_process');
-const { BrowserWindow, Notification, ipcMain } = require('electron');
+const { BrowserWindow, Notification, ipcMain, clipboard, shell } = require('electron');
 const logic = require('./logic');
 const slipRenderer = require('./slip-renderer');
 
@@ -241,6 +241,42 @@ async function testPrint() {
   return { success: true, n: idx + 1 };
 }
 
+// รายงานสรุปงานพิมพ์: เขียนไฟล์ + คัดลอกลงคลิปบอร์ด (วางส่งได้ทันที) + เปิดโฟลเดอร์ + ถ้ามีโฟลเดอร์ Google Drive ในเครื่องก็คัดลอกไปให้
+function driveFolders() {
+  const home = os.homedir();
+  return [path.join(home, 'Google Drive'), path.join(home, 'My Drive'), 'G:\\My Drive', 'H:\\My Drive']
+    .filter((p) => { try { return fs.statSync(p).isDirectory(); } catch (e) { return false; } });
+}
+
+function readLogLines() {
+  let lines = [];
+  for (const f of [logFile + '.old', logFile]) { try { lines = lines.concat(fs.readFileSync(f, 'utf8').split(/\r?\n/)); } catch (e) { /* ไม่มีไฟล์ */ } }
+  return lines.filter(Boolean);
+}
+
+function exportReport() {
+  const lines = readLogLines();
+  if (!lines.length) return { success: false, reason: 'ยังไม่มีไฟล์บันทึก — เปิดโหมด "บันทึกอย่างเดียว" แล้วขายสักบิลก่อน' };
+  const text = logic.buildReportText(lines, {
+    'เวอร์ชัน': ctx.app.getVersion(), 'โหมด': settings.mode, 'เครื่องพิมพ์': watcherPrinter || settings.printerName || '(เริ่มต้น)',
+    'ตัวกรอง': settings.docFilter, 'สร้างเมื่อ': new Date().toISOString()
+  });
+  const file = path.join(path.dirname(logFile), 'fortune-report.txt');
+  fs.writeFileSync(file, text, 'utf8');
+  try { clipboard.writeText(text); } catch (e) { /* ignore */ }
+  let drive = '';
+  for (const d of driveFolders()) {
+    try {
+      const dir = path.join(d, 'pos-hero-logs'); fs.mkdirSync(dir, { recursive: true });
+      fs.copyFileSync(file, path.join(dir, 'fortune-report.txt'));
+      fs.copyFileSync(logFile, path.join(dir, 'fortune-jobs.log'));
+      drive = dir; break;
+    } catch (e) { /* ลองโฟลเดอร์ถัดไป */ }
+  }
+  try { shell.showItemInFolder(file); } catch (e) { /* ignore */ }
+  return { success: true, file, drive, chars: text.length };
+}
+
 function getState() {
   return {
     settings, todayCount: todayCount(), ready: !!cache, rendering,
@@ -283,6 +319,7 @@ function init(context) {
   ipcMain.handle('fortune:test-print', async () => {
     try { return await testPrint(); } catch (e) { return { success: false, reason: e && e.message ? e.message : String(e) }; }
   });
+  ipcMain.handle('fortune:export-report', () => { try { return exportReport(); } catch (e) { return { success: false, reason: e && e.message ? e.message : String(e) }; } });
   ipcMain.handle('fortune:list-printers', async () => {
     try { const mw = ctx.getMainWindow(); return mw ? (await mw.webContents.getPrintersAsync()).map((p) => p.name) : []; } catch (e) { return []; }
   });
