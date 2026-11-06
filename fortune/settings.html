@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>ตั้งค่าเซียมซี</title>
+<style>
+  body { font-family: 'Leelawadee UI', 'Segoe UI', sans-serif; margin: 0; padding: 16px; background: #fafafa; color: #222; font-size: 14px; }
+  h2 { margin: 0 0 12px; }
+  .row { margin: 10px 0; }
+  label.chk { display: flex; gap: 8px; align-items: center; cursor: pointer; }
+  .lbl { display: block; margin-bottom: 4px; font-weight: 600; }
+  select, input[type=text], input[type=date] { width: 100%; box-sizing: border-box; padding: 6px; font: inherit; }
+  .dates { display: flex; gap: 8px; }
+  .hint { color: #666; font-size: 12px; margin-top: 3px; }
+  .box { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
+  button { padding: 8px 14px; font: inherit; cursor: pointer; }
+  #status { margin-top: 8px; font-size: 13px; }
+  .ok { color: #0a7a2f; } .bad { color: #b00020; }
+</style>
+</head>
+<body>
+<h2>🔮 ตั้งค่าเซียมซี</h2>
+
+<div class="box">
+  <div class="row"><span class="lbl">โหมดการทำงาน</span>
+    <select id="mode">
+      <option value="off">ปิด (ไม่เฝ้าคิว ไม่ตัดกระดาษให้)</option>
+      <option value="record">บันทึกงานพิมพ์อย่างเดียว (ขั้น 0 — เก็บชื่อเอกสาร)</option>
+      <option value="on">เปิด — ต่อท้ายเซียมซีและตัดกระดาษ</option>
+    </select>
+    <div class="hint">ก่อนเปิดโหมด "เปิด" ต้องตั้งไดรเวอร์ TM-T82III เป็น Paper Cut = No Cut ก่อน และปิดโหมดนี้เมื่อไรให้ตั้งกลับเป็น Cut</div>
+  </div>
+  <div id="stat" class="hint"></div>
+</div>
+
+<div class="box">
+  <div class="row"><label class="chk"><input type="checkbox" id="skipUnlucky"> ปิดใบโชคร้าย (ไม่สุ่ม 下签 — สุ่มจาก 83 ใบ)</label></div>
+  <div class="row"><label class="chk"><input type="checkbox" id="showZh"> ใส่กลอนจีน</label></div>
+  <div class="row"><label class="chk"><input type="checkbox" id="showTh"> ใส่กลอนแปลไทย</label></div>
+  <div class="row"><label class="chk"><input type="checkbox" id="cutOthers"> งานพิมพ์อื่นที่จบ (รายงานปิดกะ ฯลฯ) ให้ส่งคำสั่งตัดกระดาษด้วย</label></div>
+</div>
+
+<div class="box">
+  <div class="row"><span class="lbl">เครื่องพิมพ์</span><select id="printerName"></select></div>
+  <div class="row"><span class="lbl">ตัวกรองชื่อเอกสารใบเสร็จ Sea &amp; Hill</span><input type="text" id="docFilter">
+    <div class="hint">ชื่อเอกสารที่มีข้อความนี้ถือว่าเป็นใบเสร็จ (คั่นหลายคำด้วย ,) — ดูชื่อจริงจากไฟล์บันทึกหลังรันโหมดบันทึก</div></div>
+  <div class="row"><span class="lbl">ช่วงวันที่ใช้งาน (ว่าง = ไม่จำกัด)</span>
+    <div class="dates"><input type="date" id="startDate"><input type="date" id="endDate"></div>
+    <div class="hint">พ้นช่วงแล้วเหลือแค่คำสั่งตัดกระดาษ</div></div>
+  <div class="row"><span class="lbl">ข้อความท้ายใบ</span><input type="text" id="footer"></div>
+</div>
+
+<button id="save">💾 บันทึก</button>
+<button id="test">🖨️ ทดลองพิมพ์เซียมซี</button>
+<div id="status"></div>
+<div class="hint" id="logpath"></div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const bools = ['skipUnlucky', 'showZh', 'showTh', 'cutOthers'];
+  const texts = ['mode', 'docFilter', 'startDate', 'endDate', 'footer'];
+  let printersLoaded = false;
+
+  function setStatus(msg, ok) { const s = $('status'); s.textContent = msg; s.className = ok === undefined ? '' : (ok ? 'ok' : 'bad'); }
+
+  async function fillPrinters(current) {
+    if (!printersLoaded) {
+      const names = await window.fortuneApi.listPrinters();
+      const sel = $('printerName');
+      sel.innerHTML = '';
+      const def = document.createElement('option'); def.value = ''; def.textContent = '(เครื่องพิมพ์เริ่มต้นของ Windows)'; sel.appendChild(def);
+      names.forEach((n) => { const o = document.createElement('option'); o.value = n; o.textContent = n; sel.appendChild(o); });
+      printersLoaded = true;
+    }
+    $('printerName').value = current || '';
+  }
+
+  async function render(state, keepForm) {
+    const s = state.settings;
+    if (!keepForm) {
+      bools.forEach((k) => { $(k).checked = !!s[k]; });
+      texts.forEach((k) => { $(k).value = s[k] || ''; });
+      await fillPrinters(s.printerName);
+    }
+    $('stat').textContent = `พิมพ์วันนี้ ${state.todayCount} ใบ · ` +
+      (s.mode === 'on' ? (state.rendering ? 'กำลังเตรียมใบเซียมซี…' : (state.ready ? 'ใบเซียมซีพร้อม' : 'ใบเซียมซียังไม่พร้อม')) : '') +
+      ` · ตัวเฝ้าคิว: ${state.watcherRunning ? 'ทำงาน' : 'หยุด'}`;
+    $('logpath').textContent = state.logFile ? `ไฟล์บันทึกงานพิมพ์: ${state.logFile}` : '';
+  }
+
+  function collect() {
+    const o = {};
+    bools.forEach((k) => { o[k] = $(k).checked; });
+    texts.forEach((k) => { o[k] = $(k).value; });
+    o.printerName = $('printerName').value;
+    return o;
+  }
+
+  $('save').onclick = async () => { const st = await window.fortuneApi.setSettings(collect()); await render(st); setStatus('บันทึกแล้ว', true); };
+  $('test').onclick = async () => {
+    setStatus('กำลังพิมพ์…');
+    await window.fortuneApi.setSettings(collect());
+    const r = await window.fortuneApi.testPrint();
+    setStatus(r.success ? `พิมพ์ใบที่ ${r.n} แล้ว` : `พิมพ์ไม่สำเร็จ: ${r.reason}`, r.success);
+  };
+  window.fortuneApi.onState((st) => render(st, true));
+  window.fortuneApi.getState().then((st) => render(st, false));
+</script>
+</body>
+</html>
