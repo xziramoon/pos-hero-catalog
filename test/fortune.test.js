@@ -80,6 +80,39 @@ const slip = current(bmp, W, H, { init: false, finish: false });
 assert.deepStrictEqual([...slip.subarray(0, 3)], [0x1d, 0x76, 0x30]);
 assert.strictEqual(slip.length, cur.length - 2 - 7);
 
+// ---- batcher: ตัดครั้งเดียวตอนคิวเงียบ ----
+{
+  let t = 0; const timers = [];
+  const flushes = [];
+  const advance = (ms) => {
+    const end = t + ms;
+    for (;;) {
+      timers.sort((a, b) => a.at - b.at);
+      const nxt = timers.find((x) => x.at <= end);
+      if (!nxt) break;
+      timers.splice(timers.indexOf(nxt), 1); t = nxt.at; nxt.fn();
+    }
+    t = end;
+  };
+  const mk = () => logic.makeBatcher({
+    now: () => t, setT: (fn, ms) => { const o = { fn, at: t + ms }; timers.push(o); return o; },
+    clearT: (o) => { const i = timers.indexOf(o); if (i >= 0) timers.splice(i, 1); }, onFlush: (e) => flushes.push(e.map((x) => x.id))
+  });
+  // 1) งานเดียว: ตัดหลังเงียบ 600 มิลลิวินาที
+  let b = mk(); b.added(1); b.finished({ id: 1 }); advance(599); assert.deepStrictEqual(flushes, []); advance(2); assert.deepStrictEqual(flushes, [[1]]);
+  // 2) งานแทรก (149) ซ้อนกับใบเสร็จ (150): ชุดเดียว ตัดครั้งเดียวหลังใบเสร็จจบ
+  flushes.length = 0; b = mk();
+  b.added(149); b.added(150); advance(10); b.finished({ id: 149 }); advance(900); assert.deepStrictEqual(flushes, [], 'ต้องรอเพราะ 150 ยังพิมพ์อยู่');
+  b.finished({ id: 150 }); advance(700); assert.deepStrictEqual(flushes, [[149, 150]]);
+  // 3) งานค้างไม่จบ: รอไม่เกิน maxWait แล้วตัดอยู่ดี
+  flushes.length = 0; b = mk();
+  b.added(1); b.added(2); b.finished({ id: 1 }); advance(7000); assert.deepStrictEqual(flushes, []); advance(2000); assert.deepStrictEqual(flushes, [[1]]);
+  // 4) งานเข้าคิวหลังจบแต่ก่อนครบเวลาเงียบ: รวมชุดเดียวกัน
+  flushes.length = 0; b = mk();
+  b.finished({ id: 1 }); advance(300); b.added(2); advance(300); b.finished({ id: 2 }); advance(700); assert.deepStrictEqual(flushes, [[1, 2]]);
+  console.log('batcher OK');
+}
+
 console.log('fortune.test.js OK' + (original ? '' : ' (skipped HEAD compare)'));
 
 // ---- รายงานงานพิมพ์ ----
