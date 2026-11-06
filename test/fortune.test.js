@@ -28,17 +28,17 @@ for (let i = 0; i < 2000; i++) assert.notStrictEqual(fortunes[logic.pickIndex(fo
 
 // ---- การตัดสินใจ ----
 const on = logic.normalizeSettings({ mode: 'on' });
-assert.strictEqual(logic.decideAction('Sea & Hill receipt #12', on), 'slip');
+assert.strictEqual(logic.decideAction('document', on), 'slip');
 assert.strictEqual(logic.decideAction('POS Hero Receipt', on), 'skip');
 assert.strictEqual(logic.decideAction('Z-Report', on), 'cut');
 assert.strictEqual(logic.decideAction('Z-Report', { ...on, cutOthers: false }), 'skip');
-assert.strictEqual(logic.decideAction('Sea & Hill', { ...on, mode: 'record' }), 'skip');
-assert.strictEqual(logic.decideAction('Sea & Hill', { ...on, mode: 'off' }), 'skip');
+assert.strictEqual(logic.decideAction('document', { ...on, mode: 'record' }), 'skip');
+assert.strictEqual(logic.decideAction('document', { ...on, mode: 'off' }), 'skip');
 // นอกช่วงวันที่ → ตัดอย่างเดียว (ใบเสร็จต้องถูกตัดเสมอ)
 const jan = new Date(2027, 0, 15);
-assert.strictEqual(logic.decideAction('Sea & Hill', { ...on, startDate: '2027-02-01' }, jan), 'cut');
-assert.strictEqual(logic.decideAction('Sea & Hill', { ...on, endDate: '2027-01-14' }, jan), 'cut');
-assert.strictEqual(logic.decideAction('Sea & Hill', { ...on, startDate: '2027-01-15', endDate: '2027-01-15' }, jan), 'slip');
+assert.strictEqual(logic.decideAction('document', { ...on, startDate: '2027-02-01' }, jan), 'cut');
+assert.strictEqual(logic.decideAction('document', { ...on, endDate: '2027-01-14' }, jan), 'cut');
+assert.strictEqual(logic.decideAction('document', { ...on, startDate: '2027-01-15', endDate: '2027-01-15' }, jan), 'slip');
 
 // ---- ตั้งค่า / dedup ----
 assert.strictEqual(logic.normalizeSettings({ mode: 'zzz' }).mode, 'off');

@@ -16,6 +16,7 @@ function Emit($o) {
 }
 
 $seen = @{}
+$first = $true   # รอบแรก: งานที่ค้างอยู่ในคิวแล้ว (เช่น Retained จากเมื่อก่อน) ถือว่าจบไปแล้ว ห้ามทำซ้ำ
 $lastHb = Get-Date
 Emit @{ e = 'start'; printer = $PrinterName }
 
@@ -34,12 +35,14 @@ while ($true) {
         $st = [string]$j.JobStatus
         $now[$id] = $true
         if (-not $seen.ContainsKey($id)) {
-            $seen[$id] = @{ doc = [string]$j.DocumentName; status = $st; done = $false }
-            Emit @{ e = 'added'; id = $j.Id; doc = [string]$j.DocumentName; status = $st }
+            $already = $first -and ($st -match 'Printed|Complete|Retained')
+            $seen[$id] = @{ doc = [string]$j.DocumentName; status = $st; done = $already }
+            if ($already) { Emit @{ e = 'existing'; id = $j.Id; doc = [string]$j.DocumentName; status = $st } }
+            else { Emit @{ e = 'added'; id = $j.Id; doc = [string]$j.DocumentName; status = $st } }
         } else {
             $seen[$id].status = $st
         }
-        if (-not $seen[$id].done -and $st -match 'Printed|Complete') {
+        if (-not $seen[$id].done -and $st -match 'Printed|Complete|Retained') {
             $seen[$id].done = $true
             Emit @{ e = 'done'; id = $j.Id; doc = $seen[$id].doc; status = $st }
         }
@@ -53,6 +56,7 @@ while ($true) {
         }
     }
 
+    $first = $false
     if (((Get-Date) - $lastHb).TotalSeconds -ge 5) {
         $lastHb = Get-Date
         Emit @{ e = 'hb' }
