@@ -93,6 +93,32 @@ function makeDedup(limit = 200, ttlMs = 10 * 60 * 1000, nowFn = Date.now) {
   };
 }
 
+// รวมงานพิมพ์ที่จบใกล้กัน/ซ้อนกันเป็นชุดเดียว แล้วค่อยตัดกระดาษครั้งเดียวตอนคิวเงียบ
+// (ไม่งั้นงานแทรกก่อนใบเสร็จ เช่น Local Downlevel Document จะทำให้คำสั่งตัดเข้าคิวหลังใบเสร็จ แล้วเซียมซีหลุดไปอยู่อีกแถบ)
+function makeBatcher(opts) {
+  const { quietMs = 600, maxWaitMs = 8000, staleMs = 30000, now = Date.now, setT = setTimeout, clearT = clearTimeout, onFlush } = opts;
+  const active = new Map(); // id → เวลาที่เห็นเข้าคิว (งานที่ยังพิมพ์ไม่จบ)
+  let batch = [];
+  let firstAt = 0;
+  let timer = null;
+  function schedule(ms) { if (timer) clearT(timer); timer = setT(check, ms); }
+  function check() {
+    timer = null;
+    if (!batch.length) return;
+    for (const [id, t] of active) if (now() - t > staleMs) active.delete(id);
+    if (active.size > 0 && now() - firstAt < maxWaitMs) { schedule(300); return; }
+    const out = batch; batch = []; firstAt = 0;
+    onFlush(out);
+  }
+  return {
+    added(id) { active.set(id, now()); if (batch.length) schedule(quietMs); },
+    dropped(id) { active.delete(id); },
+    finished(evt) { active.delete(evt.id); if (!batch.length) firstAt = now(); batch.push(evt); schedule(quietMs); },
+    reset() { active.clear(); },
+    pending() { return batch.length; }
+  };
+}
+
 const FEED_AND_CUT = Buffer.from([0x1b, 0x64, 0x02, 0x1d, 0x56, 0x41, 0x00]); // ESC d 2 + GS V 65 0
 
 const LEVEL_LABEL = { 上签: '上签 · ดี', 中签: '中签 · กลาง', 下签: '下签 · รอจังหวะ' };
@@ -151,7 +177,7 @@ function buildReportText(lines, meta = {}) {
 }
 
 module.exports = {
-  buildReportText,
+  buildReportText, makeBatcher,
   OWN_DOC_NAME, DEFAULT_SETTINGS, normalizeSettings, localDateStr, inDateRange, matchesReceipt,
   decideAction, allowedIndexes, pickIndex, makeDedup, FEED_AND_CUT, LEVEL_LABEL
 };

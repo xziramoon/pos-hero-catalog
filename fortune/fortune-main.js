@@ -28,6 +28,13 @@ let lastHeartbeat = 0;
 let staleNotified = false;
 let stopping = false;
 let queue = Promise.resolve();
+const batcher = logic.makeBatcher({
+  onFlush: (evts) => {
+    // timeout รวมต่อชุด กันชุดเดียวค้างแล้วคิวทั้งแถวติด
+    queue = queue.then(() => withTimeout(handleBatch(evts), 45000, 'handler jobs ' + evts.map((e) => e.id).join(',')))
+      .catch((e) => log(`# handler error: ${e && e.message}`));
+  }
+});
 const dedup = logic.makeDedup(200);
 let stats = { date: logic.localDateStr(new Date()), count: 0 };
 let settingsWin = null;
@@ -111,27 +118,33 @@ async function sendBytes(buf) {
 }
 
 // ---------- จัดการงานที่พิมพ์จบ ----------
-async function handleFinishedJob(evt) {
-  const action = logic.decideAction(evt.doc, settings);
-  if (action === 'skip') return; // งานของ POS Hero เอง ฯลฯ — ไม่ลงบันทึกให้รก
-  log(`# job ${evt.id} "${evt.doc}" → ${action}`);
+// จัดการงานที่จบเป็นชุด: ใบเสร็จ 1 ใบ = เซียมซี 1 ใบ (ต่อกันบนแถบเดียว) แล้วตัดครั้งเดียวท้ายชุด
+async function handleBatch(evts) {
+  const actions = evts.map((e) => logic.decideAction(e.doc, settings));
+  const slipCount = Math.min(actions.filter((a) => a === 'slip').length, 5);
+  const ids = evts.map((e) => e.id).join(',');
+  log(`# batch jobs [${ids}] ${evts.map((e) => '"' + e.doc + '"').join(' + ')} → ${slipCount ? slipCount + ' slip + cut' : 'cut'}`);
+  if (!actions.some((a) => a !== 'skip')) return;
 
-  if (action === 'slip') {
+  if (slipCount > 0) {
     try {
       if (!cache) throw new Error('ใบเซียมซียังเรนเดอร์ไม่เสร็จ');
-      const idx = logic.pickIndex(FORTUNES, settings);
-      await sendBytes(Buffer.concat([cache[idx], logic.FEED_AND_CUT]));
-      bumpStats();
-      log(`# slip #${idx + 1} sent for job ${evt.id}`);
+      const parts = [];
+      const picked = [];
+      for (let i = 0; i < slipCount; i++) { const idx = logic.pickIndex(FORTUNES, settings); picked.push(idx + 1); parts.push(cache[idx]); }
+      parts.push(logic.FEED_AND_CUT);
+      await sendBytes(Buffer.concat(parts));
+      for (let i = 0; i < slipCount; i++) bumpStats();
+      log(`# slip #${picked.join(',#')} sent for jobs [${ids}]`);
       return;
     } catch (e) {
-      log(`# slip failed for job ${evt.id} (${e && e.message}) → cut only`);
+      log(`# slip failed for jobs [${ids}] (${e && e.message}) → cut only`);
       notify('POS Hero: ส่งเซียมซีไม่สำเร็จ', 'ตัดกระดาษให้อย่างเดียว — ' + (e && e.message ? e.message : ''));
       // ตกลงมาตัดกระดาษอย่างเดียว — ใบเสร็จต้องถูกตัดเสมอ
     }
   }
-  try { await sendBytes(logic.FEED_AND_CUT); log(`# cut sent for job ${evt.id}`); }
-  catch (e) { log(`# cut failed for job ${evt.id}: ${e && e.message}`); notify('POS Hero: ตัดกระดาษไม่สำเร็จ', 'ตรวจสอบเครื่องพิมพ์ หรือตั้งไดรเวอร์ Paper Cut กลับเป็น Cut'); }
+  try { await sendBytes(logic.FEED_AND_CUT); log(`# cut sent for jobs [${ids}]`); }
+  catch (e) { log(`# cut failed for jobs [${ids}]: ${e && e.message}`); notify('POS Hero: ตัดกระดาษไม่สำเร็จ', 'ตรวจสอบเครื่องพิมพ์ หรือตั้งไดรเวอร์ Paper Cut กลับเป็น Cut'); }
 }
 
 function onWatcherEvent(evt) {
@@ -139,19 +152,23 @@ function onWatcherEvent(evt) {
   if (evt.e !== 'hb') log(JSON.stringify(evt));
   if (settings.mode !== 'on') return; // โหมดบันทึกอย่างเดียว: ไม่ทำอะไรกับงาน
 
+  if (evt.doc === logic.OWN_DOC_NAME) return; // งานของ POS Hero เอง (มีคำสั่งตัดในตัว) — ไม่นับ ไม่ลงบันทึก
+  if (evt.e === 'added') { batcher.added(evt.id); return; }
+
   let finished = false;
   if (evt.e === 'done') finished = true;
   else if (evt.e === 'gone') finished = !evt.done && !/Error|Delet|Offline|Paperout|UserIntervention/i.test(evt.lastStatus || '');
+  if (evt.e === 'gone' && !finished) batcher.dropped(evt.id); // จบแบบพลาด/ถูกยกเลิก หรือจบไปแล้ว: เลิกรอ
   if (!finished) return;
-  if (dedup.seen(evt.id)) { log(`# skip job ${evt.id} "${evt.doc}" (already handled within 10 min)`); return; }
+  if (dedup.seen(evt.id)) { log(`# skip job ${evt.id} "${evt.doc}" (already handled within 10 min)`); batcher.dropped(evt.id); return; }
   dedup.add(evt.id);
-  // timeout รวมต่อ 1 งาน กันงานเดียวค้างแล้วคิวทั้งแถวติด
-  queue = queue.then(() => withTimeout(handleFinishedJob(evt), 45000, 'handler job ' + evt.id)).catch((e) => log(`# handler error: ${e && e.message}`));
+  batcher.finished(evt); // รอคิวเงียบ แล้วค่อยตัด/พิมพ์เซียมซีเป็นชุด (handleBatch)
 }
 
 // ---------- watcher (PowerShell ตัวเดียวรันค้าง) ----------
 async function startWatcher() {
   stopWatcher(false);
+  batcher.reset(); // ตัวเฝ้าใหม่เริ่มจำงานค้างในคิวใหม่
   stopping = false;
   if (settings.mode === 'off') return;
   let printer = '';
