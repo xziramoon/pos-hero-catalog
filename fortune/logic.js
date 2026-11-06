@@ -101,16 +101,26 @@ const LEVEL_LABEL = { 上签: '上签 · ดี', 中签: '中签 · กลา�
 function buildReportText(lines, meta = {}) {
   const events = [];
   for (const l of lines) { try { const o = JSON.parse(l); if (o && o.e) events.push(o); } catch (e) { /* บรรทัดหมายเหตุ (#...) */ } }
-  const jobs = new Map(); // id → { doc, addedAt, endAt, endEvent, lastStatus }
+  // เลขงานของ Windows วนกลับได้ (255 → 1) จึงแยกงานด้วย "เลข + ครั้งที่ขึ้น added" ไม่ใช่เลขอย่างเดียว
+  const jobs = new Map();
+  const current = new Map(); // id → key ของงานล่าสุดที่ใช้เลขนี้
+  let seq = 0;
   for (const o of events) {
     if (o.id === undefined) continue;
-    const j = jobs.get(o.id) || { id: o.id, doc: o.doc || '', statuses: new Set() };
+    if (o.e === 'added' && current.has(o.id)) {
+      const prev = jobs.get(current.get(o.id));
+      // added ซ้ำของงานเดิมที่ยังไม่จบ (watcher เริ่มใหม่) ไม่นับเป็นงานใหม่
+      if (!prev.endAt) { if (o.status) prev.statuses.add(o.status); continue; }
+      current.delete(o.id);
+    }
+    let key = current.get(o.id);
+    if (!key) { key = o.id + '#' + (++seq); current.set(o.id, key); jobs.set(key, { id: o.id, doc: o.doc || '', statuses: new Set() }); }
+    const j = jobs.get(key);
     if (o.doc) j.doc = o.doc;
     if (o.status) j.statuses.add(o.status);
     if (o.lastStatus) j.statuses.add(o.lastStatus);
     if (o.e === 'added') j.addedAt = Date.parse(o.t);
     if ((o.e === 'done' || o.e === 'gone') && !j.endAt) { j.endAt = Date.parse(o.t); j.endEvent = o.e; }
-    jobs.set(o.id, j);
   }
   const byDoc = new Map();
   for (const j of jobs.values()) {
@@ -132,8 +142,8 @@ function buildReportText(lines, meta = {}) {
   }
   const errors = events.filter((o) => o.e === 'error').slice(-5);
   if (errors.length) { out.push(''); out.push('ข้อผิดพลาดล่าสุด:'); errors.forEach((o) => out.push('  ' + o.t + ' ' + o.msg)); }
-  const notes = lines.filter((l) => l.startsWith('#')).slice(-10);
-  if (notes.length) { out.push(''); out.push('หมายเหตุจากโปรแกรม:'); notes.forEach((l) => out.push('  ' + l)); }
+  const notes = lines.filter((l) => l.startsWith('#')).slice(-15);
+  if (notes.length) { out.push(''); out.push('สิ่งที่โปรแกรมทำล่าสุด:'); notes.forEach((l) => out.push('  ' + l)); }
   out.push('');
   out.push('เหตุการณ์ล่าสุด 30 รายการ:');
   events.filter((o) => o.e !== 'hb' && o.e !== 'start').slice(-30).forEach((o) => out.push('  ' + [o.t, o.e, o.id, o.doc, o.status || o.lastStatus || ''].filter((x) => x !== undefined).join(' | ')));

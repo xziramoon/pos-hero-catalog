@@ -37,8 +37,16 @@ function log(line) {
   try {
     if (!logFile) return;
     try { if (fs.statSync(logFile).size > LOG_MAX_BYTES) fs.renameSync(logFile, logFile + '.old'); } catch (e) { /* ยังไม่มีไฟล์ */ }
-    fs.appendFileSync(logFile, line + '\n');
+    // หมายเหตุของโปรแกรม (# ...) ใส่เวลากำกับ เพื่อให้รายงานบอกได้ว่าเกิดเมื่อไร
+    const out = line.startsWith('# ') ? '# ' + new Date().toISOString() + ' ' + line.slice(2) : line;
+    fs.appendFileSync(logFile, out + '\n');
   } catch (e) { /* ignore */ }
+}
+
+function withTimeout(promise, ms, label) {
+  let timer;
+  const timeout = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(label + ' timeout ' + ms + 'ms')), ms); });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
 function notify(title, body) {
@@ -72,17 +80,21 @@ function unpackedPath(...parts) {
     : path.join(__dirname, '..', ...parts);
 }
 
+let printerCache = '';
 async function resolvePrinter() {
   if (settings.printerName) return settings.printerName;
+  if (watcherPrinter) return watcherPrinter; // ใช้เครื่องเดียวกับที่ตัวเฝ้าคิวเฝ้าอยู่ ไม่ต้องถามระบบทุกครั้ง
   const mw = ctx.getMainWindow();
   if (!mw) return '';
-  const printers = await mw.webContents.getPrintersAsync();
+  const printers = await withTimeout(mw.webContents.getPrintersAsync(), 5000, 'getPrinters');
   const target = printers.find((p) => p.isDefault) || printers[0];
+  if (target) printerCache = target.name;
   return target ? target.name : '';
 }
 
 async function sendBytes(buf) {
-  const printer = await resolvePrinter();
+  let printer = '';
+  try { printer = await resolvePrinter(); } catch (e) { printer = printerCache; if (!printer) throw e; }
   if (!printer) throw new Error('ไม่พบเครื่องพิมพ์ในระบบ');
   const tmp = path.join(os.tmpdir(), `pos-hero-fortune-${Date.now()}-${Math.random().toString(16).slice(2)}.bin`);
   fs.writeFileSync(tmp, buf);
@@ -91,7 +103,7 @@ async function sendBytes(buf) {
       execFile('powershell.exe', [
         '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', unpackedPath('build', 'raw-print.ps1'),
         '-PrinterName', printer, '-FilePath', tmp
-      ], { windowsHide: true }, (error, _o, stderr) => (error ? reject(new Error((stderr || error.message).trim())) : resolve()));
+      ], { windowsHide: true, timeout: 15000, killSignal: 'SIGKILL' }, (error, _o, stderr) => (error ? reject(new Error((stderr || error.message).trim())) : resolve()));
     });
   } finally {
     fs.unlink(tmp, () => {});
@@ -101,7 +113,8 @@ async function sendBytes(buf) {
 // ---------- จัดการงานที่พิมพ์จบ ----------
 async function handleFinishedJob(evt) {
   const action = logic.decideAction(evt.doc, settings);
-  if (action === 'skip') return;
+  if (action === 'skip') return; // งานของ POS Hero เอง ฯลฯ — ไม่ลงบันทึกให้รก
+  log(`# job ${evt.id} "${evt.doc}" → ${action}`);
 
   if (action === 'slip') {
     try {
@@ -109,15 +122,16 @@ async function handleFinishedJob(evt) {
       const idx = logic.pickIndex(FORTUNES, settings);
       await sendBytes(Buffer.concat([cache[idx], logic.FEED_AND_CUT]));
       bumpStats();
-      log(`# slip #${idx + 1} for job ${evt.id}`);
+      log(`# slip #${idx + 1} sent for job ${evt.id}`);
       return;
     } catch (e) {
-      log(`# slip failed (${e && e.message}) → cut only`);
+      log(`# slip failed for job ${evt.id} (${e && e.message}) → cut only`);
+      notify('POS Hero: ส่งเซียมซีไม่สำเร็จ', 'ตัดกระดาษให้อย่างเดียว — ' + (e && e.message ? e.message : ''));
       // ตกลงมาตัดกระดาษอย่างเดียว — ใบเสร็จต้องถูกตัดเสมอ
     }
   }
-  try { await sendBytes(logic.FEED_AND_CUT); }
-  catch (e) { log(`# cut failed: ${e && e.message}`); notify('POS Hero: ตัดกระดาษไม่สำเร็จ', 'ตรวจสอบเครื่องพิมพ์ หรือตั้งไดรเวอร์ Paper Cut กลับเป็น Cut'); }
+  try { await sendBytes(logic.FEED_AND_CUT); log(`# cut sent for job ${evt.id}`); }
+  catch (e) { log(`# cut failed for job ${evt.id}: ${e && e.message}`); notify('POS Hero: ตัดกระดาษไม่สำเร็จ', 'ตรวจสอบเครื่องพิมพ์ หรือตั้งไดรเวอร์ Paper Cut กลับเป็น Cut'); }
 }
 
 function onWatcherEvent(evt) {
@@ -128,9 +142,11 @@ function onWatcherEvent(evt) {
   let finished = false;
   if (evt.e === 'done') finished = true;
   else if (evt.e === 'gone') finished = !evt.done && !/Error|Delet|Offline|Paperout|UserIntervention/i.test(evt.lastStatus || '');
-  if (!finished || dedup.seen(evt.id)) return;
+  if (!finished) return;
+  if (dedup.seen(evt.id)) { log(`# skip job ${evt.id} "${evt.doc}" (already handled within 10 min)`); return; }
   dedup.add(evt.id);
-  queue = queue.then(() => handleFinishedJob(evt)).catch((e) => log(`# handler error: ${e && e.message}`));
+  // timeout รวมต่อ 1 งาน กันงานเดียวค้างแล้วคิวทั้งแถวติด
+  queue = queue.then(() => withTimeout(handleFinishedJob(evt), 45000, 'handler job ' + evt.id)).catch((e) => log(`# handler error: ${e && e.message}`));
 }
 
 // ---------- watcher (PowerShell ตัวเดียวรันค้าง) ----------
