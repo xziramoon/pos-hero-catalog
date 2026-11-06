@@ -1,0 +1,55 @@
+name: Release
+
+# ปล่อยรุ่นใหม่อัตโนมัติ: เมื่อ push เข้า main แล้วเลขเวอร์ชันใน package.json ยังไม่มี release (v<version>) บน GitHub
+# จะ build ติดตั้งไฟล์ Windows แล้วเผยแพร่ (pre-release) — เครื่องที่ร้านอัปเดตเองผ่าน electron-updater
+on:
+  push:
+    branches: [main]
+    paths: [package.json]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check whether this version is already released
+        id: chk
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          v=$(node -p "require('./package.json').version")
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          if gh release view "v$v" >/dev/null 2>&1; then
+            echo "Release v$v already exists — skipping"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.chk.outputs.skip != 'true'
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install
+        if: steps.chk.outputs.skip != 'true'
+        run: npm ci
+
+      - name: Fortune tests
+        if: steps.chk.outputs.skip != 'true'
+        run: node test/fortune.test.js
+
+      - name: Build and publish
+        if: steps.chk.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder --publish always
