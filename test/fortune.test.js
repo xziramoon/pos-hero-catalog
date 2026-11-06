@@ -91,5 +91,13 @@ console.log('fortune.test.js OK' + (original ? '' : ' (skipped HEAD compare)'));
     '# slip failed', 'not json'
   ], { 'โหมด': 'record' });
   assert.ok(rep.includes('Receipt POS01261106-00043') && rep.includes('3.5') && rep.includes('โหมด: record'));
+  // เลขงานวนกลับ: id 7 จบแล้ว แล้วมี id 7 ใหม่ภายหลัง ต้องไม่ได้เวลาติดลบ และนับเป็น 2 งาน
+  const t2 = '2026-11-06T12:00:00.0000000+07:00', t3 = '2026-11-06T12:00:01.0000000+07:00';
+  const rep2 = logic.buildReportText([
+    JSON.stringify({ e: 'added', id: 7, doc: 'document', t: t0 }), JSON.stringify({ e: 'gone', id: 7, doc: 'document', lastStatus: 'Spooling', t: t1 }),
+    JSON.stringify({ e: 'added', id: 7, doc: 'document', t: t2 }), JSON.stringify({ e: 'gone', id: 7, doc: 'document', lastStatus: 'Spooling', t: t3 })
+  ]);
+  assert.ok(!rep2.includes('| -'), 'negative duration');
+  assert.ok(rep2.includes('"document" → 2'));
   console.log('report OK');
 }
