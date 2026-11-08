@@ -48,7 +48,18 @@
   <div class="row"><span class="lbl">ช่วงวันที่ใช้งาน (ว่าง = ไม่จำกัด)</span>
     <div class="dates"><input type="date" id="startDate"><input type="date" id="endDate"></div>
     <div class="hint">พ้นช่วงแล้วเหลือแค่คำสั่งตัดกระดาษ</div></div>
-  <div class="row"><span class="lbl">ข้อความท้ายใบ</span><input type="text" id="footer"></div>
+  <div class="row"><span class="lbl">แบบใบเซียมซี</span>
+    <select id="theme">
+      <option value="auto">อัตโนมัติ (ลอยกระทงในช่วงวันที่ด้านล่าง นอกช่วงเป็นปีใหม่)</option>
+      <option value="newyear">ปีใหม่เสมอ</option>
+      <option value="krathong">ลอยกระทงเสมอ</option>
+    </select></div>
+  <div class="row"><span class="lbl">ช่วงวันที่แบบลอยกระทง (เมื่อเลือกอัตโนมัติ)</span>
+    <div class="dates"><input type="date" id="krathongStart"><input type="date" id="krathongEnd"></div>
+    <div class="hint">ตรวจวันลอยกระทงปีนี้จากปฏิทินแล้วตั้งให้ครอบคลุม</div></div>
+  <div class="row"><span class="lbl">ข้อความท้ายใบ (แบบปีใหม่)</span><input type="text" id="footer"></div>
+  <div class="row"><span class="lbl">ข้อความท้ายใบ (แบบลอยกระทง)</span><input type="text" id="footerKrathong">
+    <div class="hint">ใช้ | แทนการขึ้นบรรทัดใหม่</div></div>
 </div>
 
 <button id="save">💾 บันทึก</button>
@@ -60,7 +71,7 @@
 <script>
   const $ = (id) => document.getElementById(id);
   const bools = ['skipUnlucky', 'showZh', 'showTh', 'cutOthers'];
-  const texts = ['mode', 'docFilter', 'startDate', 'endDate', 'footer'];
+  const texts = ['mode', 'docFilter', 'startDate', 'endDate', 'footer', 'theme', 'krathongStart', 'krathongEnd', 'footerKrathong'];
   let printersLoaded = false;
 
   function setStatus(msg, ok) { const s = $('status'); s.textContent = msg; s.className = ok === undefined ? '' : (ok ? 'ok' : 'bad'); }

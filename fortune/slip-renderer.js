@@ -28,7 +28,7 @@ function closeWindow() {
 async function renderOne(w, fortune, opts, buildRaster) {
   const slip = Object.assign({}, fortune, { label: LEVEL_LABEL[fortune.level] || fortune.level });
   const height = await w.webContents.executeJavaScript(
-    `window.renderSlip(${JSON.stringify(slip)}, ${JSON.stringify({ showZh: opts.showZh, showTh: opts.showTh, footer: opts.footer })})`
+    `window.renderSlip(${JSON.stringify(slip)}, ${JSON.stringify({ theme: opts.theme, showZh: opts.showZh, showTh: opts.showTh, footer: opts.footer })})`
   );
   w.setContentSize(SLIP_DOT_WIDTH, Math.max(100, height));
   await delay(60);
@@ -38,7 +38,7 @@ async function renderOne(w, fortune, opts, buildRaster) {
   return buildRaster(resized.toBitmap(), size.width, size.height, { init: false, finish: false });
 }
 
-// opts: { showZh, showTh, footer } — ต้องเรียกใหม่ทุกครั้งที่สวิตช์กลอนเปลี่ยน
+// opts: { theme, showZh, showTh, footer } (จาก logic.renderOptions) — ต้องเรียกใหม่ทุกครั้งที่สวิตช์กลอนเปลี่ยน
 // isStale() คืน true ถ้ามีงานเรนเดอร์ใหม่ที่ใหม่กว่าเริ่มแล้ว (ยกเลิกรอบเก่า)
 async function renderAll(fortunes, opts, buildRaster, isStale = () => false) {
   const w = await ensureWindow();

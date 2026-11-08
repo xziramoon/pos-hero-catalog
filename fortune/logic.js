@@ -14,15 +14,20 @@ const DEFAULT_SETTINGS = Object.freeze({
   startDate: '',           // YYYY-MM-DD ว่าง = ไม่จำกัด
   endDate: '',
   cutOthers: true,         // งานอื่นที่จบ → ส่งคำสั่งตัดกระดาษให้ (เพราะไดรเวอร์ตั้ง No Cut)
-  footer: 'สวัสดีปีใหม่ 2570 · อึ้งลักเส็ง 黄六盛'
+  footer: 'สวัสดีปีใหม่ 2570 · อึ้งลักเส็ง 黄六盛',
+  theme: 'auto',           // 'auto' = ลอยกระทงในช่วงวันที่ด้านล่าง นอกช่วงเป็นปีใหม่ | 'newyear' | 'krathong'
+  krathongStart: '2026-11-22', // ช่วงวันที่ใช้แบบลอยกระทงเมื่อ theme = auto (รวมวันเริ่ม/วันจบ) — ตรวจปฏิทินแล้วแก้ในหน้าตั้งค่า
+  krathongEnd: '2026-11-26',
+  footerKrathong: '～ สุขสันต์วันลอยกระทง ～|อึ้งลักเส็ง 黄六盛' // | = ขึ้นบรรทัดใหม่
 });
 
 function normalizeSettings(raw) {
   const s = Object.assign({}, DEFAULT_SETTINGS, raw && typeof raw === 'object' ? raw : {});
   if (!['off', 'record', 'on'].includes(s.mode)) s.mode = 'off';
+  if (!['auto', 'newyear', 'krathong'].includes(s.theme)) s.theme = 'auto';
   for (const k of ['skipUnlucky', 'showZh', 'showTh', 'cutOthers']) s[k] = !!s[k];
-  for (const k of ['printerName', 'docFilter', 'footer']) s[k] = typeof s[k] === 'string' ? s[k].trim() : DEFAULT_SETTINGS[k];
-  for (const k of ['startDate', 'endDate']) s[k] = /^\d{4}-\d{2}-\d{2}$/.test(s[k]) ? s[k] : '';
+  for (const k of ['printerName', 'docFilter', 'footer', 'footerKrathong']) s[k] = typeof s[k] === 'string' ? s[k].trim() : DEFAULT_SETTINGS[k];
+  for (const k of ['startDate', 'endDate', 'krathongStart', 'krathongEnd']) s[k] = /^\d{4}-\d{2}-\d{2}$/.test(s[k]) ? s[k] : '';
   return s;
 }
 
@@ -36,6 +41,20 @@ function inDateRange(settings, now = new Date()) {
   if (settings.startDate && today < settings.startDate) return false;
   if (settings.endDate && today > settings.endDate) return false;
   return true;
+}
+
+// ธีมที่ใช้อยู่ตอนนี้ ('newyear' | 'krathong')
+function activeTheme(settings, now = new Date()) {
+  if (settings.theme === 'newyear' || settings.theme === 'krathong') return settings.theme;
+  if (!settings.krathongStart || !settings.krathongEnd) return 'newyear';
+  const today = localDateStr(now);
+  return today >= settings.krathongStart && today <= settings.krathongEnd ? 'krathong' : 'newyear';
+}
+
+// ตัวเลือกการเรนเดอร์ใบเซียมซี — ถ้าค่านี้เปลี่ยน ต้องเรนเดอร์แคชใหม่
+function renderOptions(settings, now = new Date()) {
+  const theme = activeTheme(settings, now);
+  return { theme, showZh: !!settings.showZh, showTh: !!settings.showTh, footer: theme === 'krathong' ? settings.footerKrathong : settings.footer };
 }
 
 function matchesReceipt(docName, filter) {
@@ -177,7 +196,7 @@ function buildReportText(lines, meta = {}) {
 }
 
 module.exports = {
-  buildReportText, makeBatcher,
+  buildReportText, makeBatcher, activeTheme, renderOptions,
   OWN_DOC_NAME, DEFAULT_SETTINGS, normalizeSettings, localDateStr, inDateRange, matchesReceipt,
   decideAction, allowedIndexes, pickIndex, makeDedup, FEED_AND_CUT, LEVEL_LABEL
 };

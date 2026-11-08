@@ -6,25 +6,58 @@
 <style>
   html, body { margin: 0; padding: 0; background: #fff; }
   body { width: 576px; color: #000; font-family: 'Sarabun', 'Leelawadee UI', 'Leelawadee', 'Tahoma', sans-serif; font-weight: 700; }
-  #slip { box-sizing: border-box; width: 576px; padding: 10px 18px 14px; text-align: center; }
-  .rule { border-top: 3px dashed #000; margin: 0 0 12px; }
-  .title { font-size: 30px; line-height: 1.3; }
-  .level { font-size: 26px; line-height: 1.4; margin-bottom: 8px; }
-  .zh { font-family: 'Microsoft YaHei', 'SimSun', 'Noto Sans CJK SC', sans-serif; font-size: 28px; line-height: 1.45; }
-  .th { font-size: 24px; line-height: 1.4; }
-  .block { margin: 6px 0; }
-  .meaning { font-size: 22px; line-height: 1.4; text-align: left; margin-top: 8px; }
-  .money { font-size: 22px; line-height: 1.4; text-align: left; margin-top: 4px; }
-  .footer { font-size: 22px; line-height: 1.4; margin-top: 10px; }
+  #slip { box-sizing: border-box; width: 576px; text-align: center; }
+
+  /* ---------- ธีมปีใหม่ ---------- */
+  .ny { padding: 10px 18px 14px; }
+  .ny .rule { border-top: 3px dashed #000; margin: 0 0 12px; }
+  .ny .title { font-size: 30px; line-height: 1.3; }
+  .ny .level { font-size: 26px; line-height: 1.4; margin-bottom: 8px; }
+  .ny .zh { font-family: 'Microsoft YaHei', 'SimSun', 'Noto Sans CJK SC', sans-serif; font-size: 28px; line-height: 1.45; }
+  .ny .th { font-size: 24px; line-height: 1.4; }
+  .ny .block { margin: 6px 0; }
+  .ny .meaning { font-size: 22px; line-height: 1.4; text-align: left; margin-top: 8px; }
+  .ny .money { font-size: 22px; line-height: 1.4; text-align: left; margin-top: 4px; }
+  .ny .footer { font-size: 22px; line-height: 1.4; margin-top: 10px; }
+
+  /* ---------- ธีมลอยกระทง ---------- */
+  .kr { padding: 6px 18px 14px; text-align: left; }
+  .kr .cut { border-top: 3px dashed #000; margin: 4px 0 10px; }
+  .kr .hd { display: flex; align-items: center; gap: 12px; }
+  .kr .hd svg { width: 128px; height: auto; flex: none; }
+  .kr .t1 { font-size: 27px; font-weight: 700; line-height: 1.15; }
+  .kr .t2 { font-size: 22px; line-height: 1.3; margin-top: 4px; }
+  .kr .t2 b { border: 2.5px solid #000; border-radius: 6px; padding: 0 8px; margin-left: 4px; }
+  .kr .poem { display: grid; grid-template-columns: auto 1fr; column-gap: 16px; row-gap: 2px; align-items: center; margin: 10px 0 8px; padding: 8px 0; border-top: 2px solid #000; border-bottom: 2px solid #000; }
+  .kr .poem.one { grid-template-columns: 1fr; text-align: center; }
+  .kr .zh { font-family: 'Noto Serif CJK SC', 'Noto Sans CJK SC', 'SimSun', 'Microsoft YaHei', serif; font-size: 25px; font-weight: 700; letter-spacing: 2px; }
+  .kr .poem.one .zh { font-size: 28px; }
+  .kr .th { font-size: 21px; font-weight: 600; line-height: 1.25; }
+  .kr .poem.one .th { font-size: 23px; line-height: 1.35; }
+  .kr .m { font-size: 20px; line-height: 1.35; }
+  .kr .m b { font-weight: 700; }
+  .kr .ft { text-align: center; font-size: 19px; margin-top: 10px; line-height: 1.4; }
+  .kr.nopoem .hd { margin-bottom: 8px; }
 </style>
 </head>
 <body>
 <div id="slip"></div>
 <script>
+  var KRATHONG_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 100" width="120" height="100"><g fill="#fff" stroke="#000" stroke-width="3" stroke-linejoin="round" stroke-linecap="round">' +
+    '<path d="M16 66 L26 44 L36 66Z"/><path d="M34 66 L44 44 L54 66Z"/><path d="M50 66 L60 44 L70 66Z"/><path d="M66 66 L76 44 L86 66Z"/><path d="M84 66 L94 44 L104 66Z"/>' +
+    '<path d="M32 66 Q60 40 88 66Z"/>' +
+    '<circle cx="46" cy="60" r="7"/><circle cx="46" cy="60" r="2.2" fill="#000" stroke="none"/>' +
+    '<circle cx="60" cy="54" r="7"/><circle cx="60" cy="54" r="2.2" fill="#000" stroke="none"/>' +
+    '<circle cx="74" cy="60" r="7"/><circle cx="74" cy="60" r="2.2" fill="#000" stroke="none"/>' +
+    '<rect x="55" y="22" width="10" height="26" rx="2"/><path d="M60 4 q9 10 0 17 q-9 -7 0 -17z" fill="#000"/>' +
+    '<path d="M42 50 l-7 -26 M78 50 l7 -26" stroke-width="2.4"/><circle cx="35" cy="22" r="2.4" fill="#000"/><circle cx="85" cy="22" r="2.4" fill="#000"/>' +
+    '<path d="M14 68 Q60 60 106 68 Q100 82 60 84 Q20 82 14 68Z"/>' +
+    '<path d="M13 80 L24 60 L35 80Z"/><path d="M31 80 L42 60 L53 80Z"/><path d="M49 80 L60 60 L71 80Z"/><path d="M67 80 L78 60 L89 80Z"/><path d="M85 80 L96 60 L107 80Z"/>' +
+    '<path d="M6 94 q7 -5 14 0 t14 0 t14 0 t14 0 t14 0 t14 0 t14 0 t14 0" fill="none" stroke-width="2.4"/></g></svg>';
+
   function esc(s) { return String(s).replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); }
-  // slip = { n, label, zh:[4], th:[4], meaning, money }, opts = { showZh, showTh, footer }
-  // คืนความสูง (px) ของใบเซียมซี
-  window.renderSlip = function (slip, opts) {
+
+  function renderNewYear(slip, opts) {
     var lines = function (arr) { return arr.map(function (l) { return '<div>' + esc(l) + '</div>'; }).join(''); };
     var html = '<div class="rule"></div>';
     html += '<div class="title">เซียมซีเจ้าแม่กวนอิม</div>';
@@ -34,8 +67,33 @@
     html += '<div class="meaning">ความหมาย: ' + esc(slip.meaning) + '</div>';
     html += '<div class="money">การเงิน: ' + esc(slip.money) + '</div>';
     if (opts.footer) html += '<div class="footer">' + esc(opts.footer) + '</div>';
+    return '<div class="ny">' + html + '</div>';
+  }
+
+  // กลอนจีนคู่กลอนไทยทีละบรรทัด (เปิดทั้งคู่) / คอลัมน์เดียวกลางหน้า (เปิดอย่างเดียว) / ไม่มีกรอบกลอน (ปิดทั้งคู่)
+  function renderKrathong(slip, opts) {
+    var poem = '';
+    if (opts.showZh && opts.showTh) {
+      poem = '<div class="poem">' + slip.zh.map(function (z, i) { return '<div class="zh">' + esc(z) + '</div><div class="th">' + esc(slip.th[i]) + '</div>'; }).join('') + '</div>';
+    } else if (opts.showZh) {
+      poem = '<div class="poem one">' + slip.zh.map(function (z) { return '<div class="zh">' + esc(z) + '</div>'; }).join('') + '</div>';
+    } else if (opts.showTh) {
+      poem = '<div class="poem one">' + slip.th.map(function (t) { return '<div class="th">' + esc(t) + '</div>'; }).join('') + '</div>';
+    }
+    var html = '<div class="cut"></div>';
+    html += '<div class="hd">' + KRATHONG_SVG + '<div><div class="t1">เซียมซีเจ้าแม่กวนอิม</div><div class="t2">ใบที่ ' + slip.n + ' <b>' + esc(slip.label) + '</b></div></div></div>';
+    html += poem;
+    html += '<div class="m"><b>ความหมาย:</b> ' + esc(slip.meaning) + '</div>';
+    html += '<div class="m"><b>การเงิน:</b> ' + esc(slip.money) + '</div>';
+    if (opts.footer) html += '<div class="ft">' + String(opts.footer).split('|').map(function (l) { return esc(l.trim()); }).join('<br>') + '</div>';
+    return '<div class="kr' + (poem ? '' : ' nopoem') + '">' + html + '</div>';
+  }
+
+  // slip = { n, label, zh:[4], th:[4], meaning, money }
+  // opts = { theme: 'newyear' | 'krathong', showZh, showTh, footer }  — คืนความสูง (px) ของใบเซียมซี
+  window.renderSlip = function (slip, opts) {
     var el = document.getElementById('slip');
-    el.innerHTML = html;
+    el.innerHTML = opts.theme === 'krathong' ? renderKrathong(slip, opts) : renderNewYear(slip, opts);
     return Math.ceil(el.getBoundingClientRect().height);
   };
 </script>
