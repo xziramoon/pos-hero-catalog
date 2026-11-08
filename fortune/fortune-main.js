@@ -130,10 +130,9 @@ async function handleBatch(evts) {
 
   if (slipCount > 0) {
     try {
-      if (!cache) throw new Error('ใบเซียมซียังเรนเดอร์ไม่เสร็จ');
       const parts = [];
       const picked = [];
-      for (let i = 0; i < slipCount; i++) { const idx = logic.pickIndex(FORTUNES, settings); picked.push(idx + 1); parts.push(cache[idx]); }
+      for (let i = 0; i < slipCount; i++) { const idx = logic.pickIndex(FORTUNES, settings); picked.push(idx + 1); parts.push(await getSlipBytes(idx)); }
       parts.push(logic.FEED_AND_CUT);
       await sendBytes(Buffer.concat(parts));
       for (let i = 0; i < slipCount; i++) bumpStats();
@@ -241,13 +240,38 @@ async function rebuildCache() {
       ctx.buildRaster,
       () => token !== renderToken
     );
-    if (token === renderToken) cache = result;
+    if (token === renderToken && result) {
+      cache = result;
+      rebuildFailures = 0;
+      log(`# slip cache ready (theme ${cacheOpts.theme}, zh ${cacheOpts.showZh}, th ${cacheOpts.showTh})`);
+    }
   } catch (e) {
     console.warn('[fortune] render failed:', e && e.message);
     log(`# render failed: ${e && e.message}`);
+    if (token === renderToken) scheduleRebuildRetry();
   } finally {
-    if (token === renderToken) { rendering = false; if (cache) slipRenderer.closeWindow(); onChange(); }
+    if (token === renderToken) { rendering = false; onChange(); }
   }
+}
+
+// เรนเดอร์แคชพลาด: ลองใหม่เอง (15, 30, 45 … สูงสุด 120 วินาที) ไม่ทิ้งให้แคชว่างไปจนกว่าจะปิดเปิดโปรแกรม
+let retryTimer = null;
+let rebuildFailures = 0;
+function scheduleRebuildRetry() {
+  rebuildFailures++;
+  if (retryTimer) clearTimeout(retryTimer);
+  retryTimer = setTimeout(() => {
+    retryTimer = null;
+    if (settings.mode === 'on' && !cache && !rendering) rebuildCache().catch(() => {});
+  }, Math.min(15000 * rebuildFailures, 120000));
+}
+
+// ใบเซียมซีที่จะพิมพ์: ใช้แคช ถ้ายังไม่พร้อมให้เรนเดอร์ใบนั้นใบเดียวทันที (ราว 0.3 วินาที) แทนที่จะไม่ออกเซียมซี
+async function getSlipBytes(idx) {
+  if (cache && cache[idx]) return cache[idx];
+  log(`# cache not ready → render slip #${idx + 1} on demand`);
+  if (!rendering && settings.mode === 'on') rebuildCache().catch(() => {});
+  return withTimeout(slipRenderer.renderSingle(FORTUNES[idx], logic.renderOptions(settings), ctx.buildRaster), 10000, 'render slip');
 }
 
 function applySettings(next) {
@@ -256,8 +280,8 @@ function applySettings(next) {
   saveSettings();
   const needsSlips = settings.mode === 'on';
   const lookChanged = JSON.stringify(logic.renderOptions(settings)) !== cacheKey;
-  if (needsSlips && (lookChanged || prev.mode !== 'on' || !cache)) rebuildCache().catch(() => {});
-  if (!needsSlips) { renderToken++; cache = null; rendering = false; slipRenderer.closeWindow(); }
+  if (needsSlips && (lookChanged || prev.mode !== 'on' || (!cache && !rendering))) rebuildCache().catch(() => {});
+  if (!needsSlips) { renderToken++; cache = null; rendering = false; }
   if (prev.mode !== settings.mode || prev.printerName !== settings.printerName) {
     if (settings.mode === 'off') stopWatcher(); else startWatcher().catch(() => {});
   }
@@ -266,18 +290,9 @@ function applySettings(next) {
 }
 
 async function testPrint() {
-  const wasCache = cache;
-  if (!wasCache) {
-    // ยังไม่เปิดโหมดใช้งาน: เรนเดอร์ใบเดียวไว้ทดลอง
-    const w = await slipRenderer.ensureWindow();
-    const idx = logic.pickIndex(FORTUNES, settings);
-    const bytes = await slipRenderer.renderOne(w, FORTUNES[idx], logic.renderOptions(settings), ctx.buildRaster);
-    slipRenderer.closeWindow();
-    await sendBytes(Buffer.concat([bytes, logic.FEED_AND_CUT]));
-    return { success: true, n: idx + 1 };
-  }
   const idx = logic.pickIndex(FORTUNES, settings);
-  await sendBytes(Buffer.concat([wasCache[idx], logic.FEED_AND_CUT]));
+  const bytes = cache && cache[idx] ? cache[idx] : await withTimeout(slipRenderer.renderSingle(FORTUNES[idx], logic.renderOptions(settings), ctx.buildRaster), 10000, 'render slip');
+  await sendBytes(Buffer.concat([bytes, logic.FEED_AND_CUT]));
   return { success: true, n: idx + 1 };
 }
 
@@ -367,11 +382,11 @@ function init(context) {
   if (settings.mode === 'on') rebuildCache().catch(() => {});
   // ข้ามวันแล้วธีมอาจเปลี่ยน (auto ตามช่วงวันที่) — ตรวจทุก 10 นาที ถ้าเปลี่ยนให้เรนเดอร์แคชใหม่
   themeTimer = setInterval(() => {
-    if (settings.mode === 'on' && !rendering && JSON.stringify(logic.renderOptions(settings)) !== cacheKey) rebuildCache().catch(() => {});
+    if (settings.mode === 'on' && !rendering && (!cache || JSON.stringify(logic.renderOptions(settings)) !== cacheKey)) rebuildCache().catch(() => {});
   }, 10 * 60 * 1000);
   if (settings.mode !== 'off') startWatcher().catch(() => {});
 }
 
-function shutdown() { if (themeTimer) clearInterval(themeTimer); stopWatcher(true); slipRenderer.closeWindow(); }
+function shutdown() { if (themeTimer) clearInterval(themeTimer); stopWatcher(true); slipRenderer.closeAll(); }
 
 module.exports = { init, shutdown, trayItems, openSettings };

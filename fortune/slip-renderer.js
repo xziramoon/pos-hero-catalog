@@ -1,5 +1,7 @@
 'use strict';
-// เรนเดอร์ใบเซียมซีทั้ง 100 ใบในหน้าต่างซ่อน → ESC/POS เก็บไว้ในหน่วยความจำ (พิมพ์จริงจะไม่มีความหน่วง)
+// เรนเดอร์ใบเซียมซีเป็น ESC/POS ในหน้าต่างซ่อน
+// ทุกงานเรนเดอร์ใช้หน้าต่างของตัวเอง (สร้าง → ใช้ → ทำลาย) ห้ามแชร์หน้าต่างกัน:
+// ตอนแรกแชร์หน้าต่างเดียว แล้วปุ่มทดลองพิมพ์ปิดหน้าต่างทิ้งกลางทางขณะที่แคช 100 ใบกำลังเรนเดอร์ ("Object has been destroyed")
 const path = require('path');
 const { BrowserWindow } = require('electron');
 const { LEVEL_LABEL } = require('./logic');
@@ -7,21 +9,31 @@ const { LEVEL_LABEL } = require('./logic');
 const SLIP_DOT_WIDTH = 576; // 80 มม. เท่าใบเสร็จ
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 
-let win = null;
+const openWindows = new Set();
 
-async function ensureWindow() {
-  if (win && !win.isDestroyed()) return win;
-  win = new BrowserWindow({
+function destroyWindow(w) {
+  try { if (w && !w.isDestroyed()) w.destroy(); } catch (e) { /* ignore */ }
+  openWindows.delete(w);
+}
+
+async function createWindow() {
+  const w = new BrowserWindow({
     show: false, width: SLIP_DOT_WIDTH, height: 400, useContentSize: true, frame: false,
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false }
   });
-  await win.loadFile(path.join(__dirname, 'slip.html'));
-  return win;
+  openWindows.add(w);
+  try {
+    await w.loadFile(path.join(__dirname, 'slip.html'));
+  } catch (e) {
+    destroyWindow(w);
+    throw e;
+  }
+  return w;
 }
 
-function closeWindow() {
-  try { if (win && !win.isDestroyed()) win.destroy(); } catch (e) { /* ignore */ }
-  win = null;
+// ปิดทุกหน้าต่างเรนเดอร์ที่ค้างอยู่ (ตอนปิดโปรแกรมเท่านั้น)
+function closeAll() {
+  for (const w of [...openWindows]) destroyWindow(w);
 }
 
 // เรนเดอร์ 1 ใบ → Buffer ESC/POS (ไม่มี ESC @ และไม่มีคำสั่งตัด — ต่อท้ายใบเสร็จที่พิมพ์ไปแล้ว)
@@ -38,16 +50,26 @@ async function renderOne(w, fortune, opts, buildRaster) {
   return buildRaster(resized.toBitmap(), size.width, size.height, { init: false, finish: false });
 }
 
-// opts: { theme, showZh, showTh, footer } (จาก logic.renderOptions) — ต้องเรียกใหม่ทุกครั้งที่สวิตช์กลอนเปลี่ยน
-// isStale() คืน true ถ้ามีงานเรนเดอร์ใหม่ที่ใหม่กว่าเริ่มแล้ว (ยกเลิกรอบเก่า)
-async function renderAll(fortunes, opts, buildRaster, isStale = () => false) {
-  const w = await ensureWindow();
-  const cache = new Array(fortunes.length).fill(null);
-  for (let i = 0; i < fortunes.length; i++) {
-    if (isStale()) return null;
-    cache[i] = await renderOne(w, fortunes[i], opts, buildRaster);
-  }
-  return cache;
+// เรนเดอร์ใบเดียวด้วยหน้าต่างใหม่ (ใช้ตอนแคชยังไม่พร้อม และปุ่มทดลองพิมพ์)
+async function renderSingle(fortune, opts, buildRaster) {
+  const w = await createWindow();
+  try { return await renderOne(w, fortune, opts, buildRaster); } finally { destroyWindow(w); }
 }
 
-module.exports = { renderAll, renderOne, ensureWindow, closeWindow };
+// opts: { theme, showZh, showTh, footer } (จาก logic.renderOptions) — ต้องเรียกใหม่ทุกครั้งที่ตัวเลือกเปลี่ยน
+// isStale() คืน true ถ้ามีงานเรนเดอร์ที่ใหม่กว่าเริ่มแล้ว (ยกเลิกรอบเก่า → คืน null)
+async function renderAll(fortunes, opts, buildRaster, isStale = () => false) {
+  const w = await createWindow();
+  try {
+    const cache = new Array(fortunes.length).fill(null);
+    for (let i = 0; i < fortunes.length; i++) {
+      if (isStale()) return null;
+      cache[i] = await renderOne(w, fortunes[i], opts, buildRaster);
+    }
+    return cache;
+  } finally {
+    destroyWindow(w);
+  }
+}
+
+module.exports = { renderAll, renderSingle, closeAll };
