@@ -80,6 +80,22 @@ const slip = current(bmp, W, H, { init: false, finish: false });
 assert.deepStrictEqual([...slip.subarray(0, 3)], [0x1d, 0x76, 0x30]);
 assert.strictEqual(slip.length, cur.length - 2 - 7);
 
+// ---- ธีมใบเซียมซี ----
+{
+  const base = logic.normalizeSettings({ mode: 'on', krathongStart: '2026-11-22', krathongEnd: '2026-11-26' });
+  assert.strictEqual(logic.activeTheme(base, new Date(2026, 10, 8)), 'newyear');
+  assert.strictEqual(logic.activeTheme(base, new Date(2026, 10, 22)), 'krathong'); // รวมวันเริ่ม
+  assert.strictEqual(logic.activeTheme(base, new Date(2026, 10, 26)), 'krathong'); // รวมวันจบ
+  assert.strictEqual(logic.activeTheme(base, new Date(2026, 10, 27)), 'newyear');
+  assert.strictEqual(logic.activeTheme({ ...base, theme: 'krathong' }, new Date(2026, 0, 1)), 'krathong');
+  assert.strictEqual(logic.activeTheme({ ...base, theme: 'newyear' }, new Date(2026, 10, 24)), 'newyear');
+  assert.strictEqual(logic.activeTheme({ ...base, krathongStart: '' }, new Date(2026, 10, 24)), 'newyear');
+  assert.strictEqual(logic.normalizeSettings({ theme: 'zzz' }).theme, 'auto');
+  const ro = logic.renderOptions(base, new Date(2026, 10, 24));
+  assert.strictEqual(ro.theme, 'krathong'); assert.ok(ro.footer.includes('ลอยกระทง'));
+  assert.ok(logic.renderOptions(base, new Date(2026, 10, 8)).footer.includes('ปีใหม่'));
+}
+
 // ---- batcher: ตัดครั้งเดียวตอนคิวเงียบ ----
 {
   let t = 0; const timers = [];

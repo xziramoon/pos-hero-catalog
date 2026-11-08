@@ -17,6 +17,8 @@ let ctx = null;            // { app, getMainWindow, buildRaster }
 let settings = logic.normalizeSettings(null);
 let settingsFile = '';
 let logFile = '';
+let cacheKey = '';        // ตัวเลือกการเรนเดอร์ของแคชปัจจุบัน (ธีม/กลอน/ข้อความท้ายใบ)
+let themeTimer = null;
 let cache = null;          // Buffer[100] หรือ null ถ้ายังเรนเดอร์ไม่เสร็จ
 let renderToken = 0;
 let rendering = false;
@@ -227,13 +229,15 @@ function stopWatcher(final = true) {
 // ---------- เรนเดอร์แคช ----------
 async function rebuildCache() {
   const token = ++renderToken;
+  const cacheOpts = logic.renderOptions(settings);
+  cacheKey = JSON.stringify(cacheOpts);
   cache = null;
   rendering = true;
   onChange();
   try {
     const result = await slipRenderer.renderAll(
       FORTUNES,
-      { showZh: settings.showZh, showTh: settings.showTh, footer: settings.footer },
+      cacheOpts,
       ctx.buildRaster,
       () => token !== renderToken
     );
@@ -251,7 +255,7 @@ function applySettings(next) {
   settings = logic.normalizeSettings(Object.assign({}, prev, next));
   saveSettings();
   const needsSlips = settings.mode === 'on';
-  const lookChanged = prev.showZh !== settings.showZh || prev.showTh !== settings.showTh || prev.footer !== settings.footer;
+  const lookChanged = JSON.stringify(logic.renderOptions(settings)) !== cacheKey;
   if (needsSlips && (lookChanged || prev.mode !== 'on' || !cache)) rebuildCache().catch(() => {});
   if (!needsSlips) { renderToken++; cache = null; rendering = false; slipRenderer.closeWindow(); }
   if (prev.mode !== settings.mode || prev.printerName !== settings.printerName) {
@@ -267,7 +271,7 @@ async function testPrint() {
     // ยังไม่เปิดโหมดใช้งาน: เรนเดอร์ใบเดียวไว้ทดลอง
     const w = await slipRenderer.ensureWindow();
     const idx = logic.pickIndex(FORTUNES, settings);
-    const bytes = await slipRenderer.renderOne(w, FORTUNES[idx], settings, ctx.buildRaster);
+    const bytes = await slipRenderer.renderOne(w, FORTUNES[idx], logic.renderOptions(settings), ctx.buildRaster);
     slipRenderer.closeWindow();
     await sendBytes(Buffer.concat([bytes, logic.FEED_AND_CUT]));
     return { success: true, n: idx + 1 };
@@ -361,9 +365,13 @@ function init(context) {
   });
 
   if (settings.mode === 'on') rebuildCache().catch(() => {});
+  // ข้ามวันแล้วธีมอาจเปลี่ยน (auto ตามช่วงวันที่) — ตรวจทุก 10 นาที ถ้าเปลี่ยนให้เรนเดอร์แคชใหม่
+  themeTimer = setInterval(() => {
+    if (settings.mode === 'on' && !rendering && JSON.stringify(logic.renderOptions(settings)) !== cacheKey) rebuildCache().catch(() => {});
+  }, 10 * 60 * 1000);
   if (settings.mode !== 'off') startWatcher().catch(() => {});
 }
 
-function shutdown() { stopWatcher(true); slipRenderer.closeWindow(); }
+function shutdown() { if (themeTimer) clearInterval(themeTimer); stopWatcher(true); slipRenderer.closeWindow(); }
 
 module.exports = { init, shutdown, trayItems, openSettings };
