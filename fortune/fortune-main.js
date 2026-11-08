@@ -179,7 +179,7 @@ async function startWatcher() {
   try {
     watcher = spawn('powershell.exe', [
       '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', unpackedPath('fortune', 'job-watcher.ps1'),
-      '-PrinterName', printer, '-IntervalMs', '300'
+      '-PrinterName', printer, '-IntervalMs', '120'
     ], { windowsHide: true });
   } catch (e) { log(`# spawn failed: ${e && e.message}`); restartTimer = setTimeout(startWatcher, WATCHER_RESTART_MS); return; }
 

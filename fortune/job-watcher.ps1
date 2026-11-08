@@ -1,10 +1,10 @@
 # เฝ้าคิวเครื่องพิมพ์ ส่งเหตุการณ์เป็น JSON บรรทัดละ 1 รายการออก stdout
 #   added = งานเข้าคิว | done = พิมพ์จบ | gone = งานหายจากคิว (lastStatus ใช้แยกว่าจบปกติหรือพลาด)
 #   hb = สัญญาณยังทำงานอยู่ (ทุก ~5 วินาที) | error = อ่านคิวไม่ได้
-# ใช้: job-watcher.ps1 -PrinterName "<ชื่อเครื่องพิมพ์>" [-IntervalMs 300]
+# ใช้: job-watcher.ps1 -PrinterName "<ชื่อเครื่องพิมพ์>" [-IntervalMs 120]
 param(
     [Parameter(Mandatory=$true)][string]$PrinterName,
-    [int]$IntervalMs = 300
+    [int]$IntervalMs = 120
 )
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
