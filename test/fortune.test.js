@@ -92,8 +92,21 @@ assert.strictEqual(slip.length, cur.length - 2 - 7);
   assert.strictEqual(logic.activeTheme({ ...base, krathongStart: '' }, new Date(2026, 10, 24)), 'newyear');
   assert.strictEqual(logic.normalizeSettings({ theme: 'zzz' }).theme, 'auto');
   const ro = logic.renderOptions(base, new Date(2026, 10, 24));
-  assert.strictEqual(ro.theme, 'krathong'); assert.ok(ro.footer.includes('ลอยกระทง'));
-  assert.ok(logic.renderOptions(base, new Date(2026, 10, 8)).footer.includes('ปีใหม่'));
+  assert.strictEqual(ro.theme, 'krathong'); assert.ok(ro.mascotFooter.includes('ลอยกระทง'));
+  assert.ok(logic.renderOptions(base, new Date(2026, 10, 8)).mascotFooter.includes('ปีใหม่'));
+  // เปิดมาสคอต: ข้อความท้ายใบย้ายไปอยู่ในบล็อกมาสคอต (ตัวใบไม่มี footer); ปิดมาสคอต: footer อยู่ที่ตัวใบเหมือนเดิม
+  assert.strictEqual(ro.mascot, true); assert.strictEqual(ro.footer, '');
+  const noM = logic.renderOptions({ ...base, mascot: false }, new Date(2026, 10, 24));
+  assert.strictEqual(noM.mascot, false); assert.ok(noM.footer.includes('ลอยกระทง'));
+  // เลือกท่ามาสคอต
+  assert.strictEqual(logic.pickMascot({ mascotPose: '3' }, 6, () => 0), 3);
+  assert.strictEqual(logic.pickMascot({ mascotPose: '9' }, 6, () => 2), 2); // เลขเกินจำนวนท่า → สุ่ม
+  assert.strictEqual(logic.pickMascot({ mascotPose: 'random' }, 6, () => 5), 5);
+  assert.strictEqual(logic.normalizeSettings({ mascotPose: 'zzz' }).mascotPose, 'random');
+  assert.strictEqual(logic.normalizeSettings({ mascotPose: 4 }).mascotPose, '4');
+  const mc = require('../fortune/mascot.json');
+  assert.strictEqual(mc.length, 6);
+  mc.forEach((p) => { assert.ok(p.caption && p.img.startsWith('data:image/png;base64,')); });
 }
 
 // ---- batcher: ตัดครั้งเดียวตอนคิวเงียบ ----

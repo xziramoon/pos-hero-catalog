@@ -9,6 +9,7 @@ const logic = require('./logic');
 const slipRenderer = require('./slip-renderer');
 
 const FORTUNES = require('./fortunes.json');
+const MASCOTS = require('./mascot.json'); // น้องริสุซัง (กระรอก) 6 ท่า + คำพูด
 const HEARTBEAT_STALE_MS = 30 * 1000;
 const WATCHER_RESTART_MS = 2000;
 const LOG_MAX_BYTES = 512 * 1024;
@@ -19,6 +20,7 @@ let settingsFile = '';
 let logFile = '';
 let cacheKey = '';        // ตัวเลือกการเรนเดอร์ของแคชปัจจุบัน (ธีม/กลอน/ข้อความท้ายใบ)
 let themeTimer = null;
+let mascotCache = null;    // Buffer[6] บล็อกมาสคอตต่อท่า (null ถ้าปิดมาสคอตหรือยังไม่เสร็จ)
 let cache = null;          // Buffer[100] หรือ null ถ้ายังเรนเดอร์ไม่เสร็จ
 let renderToken = 0;
 let rendering = false;
@@ -132,7 +134,12 @@ async function handleBatch(evts) {
     try {
       const parts = [];
       const picked = [];
-      for (let i = 0; i < slipCount; i++) { const idx = logic.pickIndex(FORTUNES, settings); picked.push(idx + 1); parts.push(await getSlipBytes(idx)); }
+      for (let i = 0; i < slipCount; i++) {
+        const idx = logic.pickIndex(FORTUNES, settings);
+        const r = await getSlipBytes(idx);
+        picked.push(r.mascot >= 0 ? (idx + 1) + '+m' + r.mascot : String(idx + 1));
+        parts.push(r.bytes);
+      }
       parts.push(logic.FEED_AND_CUT);
       await sendBytes(Buffer.concat(parts));
       for (let i = 0; i < slipCount; i++) bumpStats();
@@ -231,6 +238,7 @@ async function rebuildCache() {
   const cacheOpts = logic.renderOptions(settings);
   cacheKey = JSON.stringify(cacheOpts);
   cache = null;
+  mascotCache = null;
   rendering = true;
   onChange();
   try {
@@ -240,10 +248,16 @@ async function rebuildCache() {
       ctx.buildRaster,
       () => token !== renderToken
     );
+    let mascots = null;
+    if (result && cacheOpts.mascot) {
+      try { mascots = await slipRenderer.renderMascotAll(MASCOTS, cacheOpts, ctx.buildRaster, () => token !== renderToken); }
+      catch (e) { log(`# mascot render failed: ${e && e.message} (พิมพ์เซียมซีโดยไม่มีมาสคอต)`); }
+    }
     if (token === renderToken && result) {
+      mascotCache = mascots;
       cache = result;
       rebuildFailures = 0;
-      log(`# slip cache ready (theme ${cacheOpts.theme}, zh ${cacheOpts.showZh}, th ${cacheOpts.showTh})`);
+      log(`# slip cache ready (theme ${cacheOpts.theme}, zh ${cacheOpts.showZh}, th ${cacheOpts.showTh}, mascot ${mascotCache ? MASCOTS.length + ' poses' : 'off'})`);
     }
   } catch (e) {
     console.warn('[fortune] render failed:', e && e.message);
@@ -268,10 +282,21 @@ function scheduleRebuildRetry() {
 
 // ใบเซียมซีที่จะพิมพ์: ใช้แคช ถ้ายังไม่พร้อมให้เรนเดอร์ใบนั้นใบเดียวทันที (ราว 0.3 วินาที) แทนที่จะไม่ออกเซียมซี
 async function getSlipBytes(idx) {
-  if (cache && cache[idx]) return cache[idx];
-  log(`# cache not ready → render slip #${idx + 1} on demand`);
-  if (!rendering && settings.mode === 'on') rebuildCache().catch(() => {});
-  return withTimeout(slipRenderer.renderSingle(FORTUNES[idx], logic.renderOptions(settings), ctx.buildRaster), 10000, 'render slip');
+  const opts = logic.renderOptions(settings);
+  const m = opts.mascot ? logic.pickMascot(settings, MASCOTS.length) : -1;
+  let body = cache && cache[idx];
+  if (!body) {
+    log(`# cache not ready → render slip #${idx + 1} on demand`);
+    if (!rendering && settings.mode === 'on') rebuildCache().catch(() => {});
+    body = await withTimeout(slipRenderer.renderSingle(FORTUNES[idx], opts, ctx.buildRaster), 10000, 'render slip');
+  }
+  if (m < 0) return { bytes: body, mascot: -1 };
+  let block = mascotCache && mascotCache[m];
+  if (!block) {
+    try { block = await withTimeout(slipRenderer.renderMascotSingle(MASCOTS[m], opts, ctx.buildRaster), 10000, 'render mascot'); }
+    catch (e) { log(`# mascot render failed: ${e && e.message}`); return { bytes: body, mascot: -1 }; }
+  }
+  return { bytes: Buffer.concat([body, block]), mascot: m };
 }
 
 function applySettings(next) {
@@ -281,7 +306,7 @@ function applySettings(next) {
   const needsSlips = settings.mode === 'on';
   const lookChanged = JSON.stringify(logic.renderOptions(settings)) !== cacheKey;
   if (needsSlips && (lookChanged || prev.mode !== 'on' || (!cache && !rendering))) rebuildCache().catch(() => {});
-  if (!needsSlips) { renderToken++; cache = null; rendering = false; }
+  if (!needsSlips) { renderToken++; cache = null; mascotCache = null; rendering = false; }
   if (prev.mode !== settings.mode || prev.printerName !== settings.printerName) {
     if (settings.mode === 'off') stopWatcher(); else startWatcher().catch(() => {});
   }
@@ -291,8 +316,8 @@ function applySettings(next) {
 
 async function testPrint() {
   const idx = logic.pickIndex(FORTUNES, settings);
-  const bytes = cache && cache[idx] ? cache[idx] : await withTimeout(slipRenderer.renderSingle(FORTUNES[idx], logic.renderOptions(settings), ctx.buildRaster), 10000, 'render slip');
-  await sendBytes(Buffer.concat([bytes, logic.FEED_AND_CUT]));
+  const r = await getSlipBytes(idx);
+  await sendBytes(Buffer.concat([r.bytes, logic.FEED_AND_CUT]));
   return { success: true, n: idx + 1 };
 }
 
