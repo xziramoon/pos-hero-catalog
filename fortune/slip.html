@@ -38,6 +38,12 @@
   .kr .m b { font-weight: 700; }
   .kr .ft { text-align: center; font-size: 19px; margin-top: 10px; line-height: 1.4; }
   .kr.nopoem .hd { margin-bottom: 8px; }
+
+  /* ---------- บล็อกมาสคอต (ต่อท้ายตัวใบเซียมซี) ---------- */
+  .mc { display: flex; align-items: center; gap: 14px; padding: 4px 18px 14px; text-align: left; }
+  .mc img { width: 132px; height: auto; flex: none; display: block; }
+  .mc .cap { font-size: 26px; font-weight: 700; line-height: 1.25; }
+  .mc .ft { font-size: 19px; font-weight: 600; line-height: 1.35; margin-top: 8px; }
 </style>
 </head>
 <body>
@@ -88,6 +94,15 @@
     if (opts.footer) html += '<div class="ft">' + String(opts.footer).split('|').map(function (l) { return esc(l.trim()); }).join('<br>') + '</div>';
     return '<div class="kr' + (poem ? '' : ' nopoem') + '">' + html + '</div>';
   }
+
+  // บล็อกมาสคอต: รูปกระรอกซ้าย + คำพูดและข้อความท้ายใบขวา — คืน Promise ความสูง (px) หลังรูปโหลดเสร็จ
+  window.renderMascot = function (pose, opts) {
+    var foot = opts.footer ? '<div class="ft">' + String(opts.footer).split('|').map(function (l) { return esc(l.trim()); }).join('<br>') + '</div>' : '';
+    var el = document.getElementById('slip');
+    el.innerHTML = '<div class="mc"><img id="mimg" src="' + pose.img + '"><div><div class="cap">' + esc(pose.caption) + '</div>' + foot + '</div></div>';
+    var img = document.getElementById('mimg');
+    return img.decode().catch(function () {}).then(function () { return Math.ceil(el.getBoundingClientRect().height); });
+  };
 
   // slip = { n, label, zh:[4], th:[4], meaning, money }
   // opts = { theme: 'newyear' | 'krathong', showZh, showTh, footer }  — คืนความสูง (px) ของใบเซียมซี

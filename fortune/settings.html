@@ -38,6 +38,17 @@
   <div class="row"><label class="chk"><input type="checkbox" id="skipUnlucky"> ปิดใบโชคร้าย (ไม่สุ่ม 下签 — สุ่มจาก 83 ใบ)</label></div>
   <div class="row"><label class="chk"><input type="checkbox" id="showZh"> ใส่กลอนจีน</label></div>
   <div class="row"><label class="chk"><input type="checkbox" id="showTh"> ใส่กลอนแปลไทย</label></div>
+  <div class="row"><label class="chk"><input type="checkbox" id="mascot"> ใส่น้องริสุซัง (กระรอก) + คำพูด ท้ายใบเซียมซี</label></div>
+  <div class="row"><span class="lbl">ท่าของน้องริสุซัง</span>
+    <select id="mascotPose">
+      <option value="random">สุ่มทุกใบ</option>
+      <option value="0">โบกมือทักทาย — สวัสดีค่ะ!</option>
+      <option value="1">ยิ้มต้อนรับ — ยินดีต้อนรับค่ะ</option>
+      <option value="2">ขอบคุณ — ขอบคุณที่มาอุดหนุนค่ะ</option>
+      <option value="3">ถือเครื่องดื่ม — ดื่มน้ำเยอะๆ สุขภาพดีนะคะ</option>
+      <option value="4">ขยิบตา — ริสุซังยินดีให้บริการค่ะ</option>
+      <option value="5">โทรโข่ง — มีโปรดีๆ มาบอกค่ะ!</option>
+    </select></div>
   <div class="row"><label class="chk"><input type="checkbox" id="cutOthers"> งานพิมพ์อื่นที่จบ (รายงานปิดกะ ฯลฯ) ให้ส่งคำสั่งตัดกระดาษด้วย</label></div>
 </div>
 
@@ -70,8 +81,8 @@
 
 <script>
   const $ = (id) => document.getElementById(id);
-  const bools = ['skipUnlucky', 'showZh', 'showTh', 'cutOthers'];
-  const texts = ['mode', 'docFilter', 'startDate', 'endDate', 'footer', 'theme', 'krathongStart', 'krathongEnd', 'footerKrathong'];
+  const bools = ['skipUnlucky', 'showZh', 'showTh', 'cutOthers', 'mascot'];
+  const texts = ['mode', 'docFilter', 'startDate', 'endDate', 'footer', 'theme', 'krathongStart', 'krathongEnd', 'footerKrathong', 'mascotPose'];
   let printersLoaded = false;
 
   function setStatus(msg, ok) { const s = $('status'); s.textContent = msg; s.className = ok === undefined ? '' : (ok ? 'ok' : 'bad'); }

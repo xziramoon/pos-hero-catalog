@@ -18,14 +18,18 @@ const DEFAULT_SETTINGS = Object.freeze({
   theme: 'auto',           // 'auto' = ลอยกระทงในช่วงวันที่ด้านล่าง นอกช่วงเป็นปีใหม่ | 'newyear' | 'krathong'
   krathongStart: '2026-11-22', // ช่วงวันที่ใช้แบบลอยกระทงเมื่อ theme = auto (รวมวันเริ่ม/วันจบ) — ตรวจปฏิทินแล้วแก้ในหน้าตั้งค่า
   krathongEnd: '2026-11-26',
-  footerKrathong: '～ สุขสันต์วันลอยกระทง ～|อึ้งลักเส็ง 黄六盛' // | = ขึ้นบรรทัดใหม่
+  footerKrathong: '～ สุขสันต์วันลอยกระทง ～|อึ้งลักเส็ง 黄六盛', // | = ขึ้นบรรทัดใหม่
+  mascot: true,            // พิมพ์น้องริสุซัง (กระรอก) + คำพูด ท้ายใบเซียมซี
+  mascotPose: 'random'     // 'random' หรือเลขท่า '0'-'5'
 });
 
 function normalizeSettings(raw) {
   const s = Object.assign({}, DEFAULT_SETTINGS, raw && typeof raw === 'object' ? raw : {});
   if (!['off', 'record', 'on'].includes(s.mode)) s.mode = 'off';
   if (!['auto', 'newyear', 'krathong'].includes(s.theme)) s.theme = 'auto';
-  for (const k of ['skipUnlucky', 'showZh', 'showTh', 'cutOthers']) s[k] = !!s[k];
+  for (const k of ['skipUnlucky', 'showZh', 'showTh', 'cutOthers', 'mascot']) s[k] = !!s[k];
+  if (s.mascotPose !== 'random' && !/^[0-9]$/.test(String(s.mascotPose))) s.mascotPose = 'random';
+  s.mascotPose = String(s.mascotPose);
   for (const k of ['printerName', 'docFilter', 'footer', 'footerKrathong']) s[k] = typeof s[k] === 'string' ? s[k].trim() : DEFAULT_SETTINGS[k];
   for (const k of ['startDate', 'endDate', 'krathongStart', 'krathongEnd']) s[k] = /^\d{4}-\d{2}-\d{2}$/.test(s[k]) ? s[k] : '';
   return s;
@@ -54,7 +58,15 @@ function activeTheme(settings, now = new Date()) {
 // ตัวเลือกการเรนเดอร์ใบเซียมซี — ถ้าค่านี้เปลี่ยน ต้องเรนเดอร์แคชใหม่
 function renderOptions(settings, now = new Date()) {
   const theme = activeTheme(settings, now);
-  return { theme, showZh: !!settings.showZh, showTh: !!settings.showTh, footer: theme === 'krathong' ? settings.footerKrathong : settings.footer };
+  const footer = theme === 'krathong' ? settings.footerKrathong : settings.footer;
+  // เปิดมาสคอต: ข้อความท้ายใบย้ายไปอยู่ในบล็อกมาสคอต (ข้างรูป) ตัวใบเซียมซีจึงไม่มีข้อความท้ายใบ
+  return { theme, showZh: !!settings.showZh, showTh: !!settings.showTh, mascot: !!settings.mascot, footer: settings.mascot ? '' : footer, mascotFooter: footer };
+}
+
+// เลือกท่ามาสคอตของใบนี้ (count = จำนวนท่า)
+function pickMascot(settings, count, randomInt = crypto.randomInt) {
+  if (settings.mascotPose !== 'random') { const n = Number(settings.mascotPose); if (n < count) return n; }
+  return randomInt(0, count);
 }
 
 function matchesReceipt(docName, filter) {
@@ -196,7 +208,7 @@ function buildReportText(lines, meta = {}) {
 }
 
 module.exports = {
-  buildReportText, makeBatcher, activeTheme, renderOptions,
+  buildReportText, makeBatcher, activeTheme, renderOptions, pickMascot,
   OWN_DOC_NAME, DEFAULT_SETTINGS, normalizeSettings, localDateStr, inDateRange, matchesReceipt,
   decideAction, allowedIndexes, pickIndex, makeDedup, FEED_AND_CUT, LEVEL_LABEL
 };

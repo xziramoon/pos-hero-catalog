@@ -50,6 +50,32 @@ async function renderOne(w, fortune, opts, buildRaster) {
   return buildRaster(resized.toBitmap(), size.width, size.height, { init: false, finish: false });
 }
 
+// เรนเดอร์บล็อกมาสคอต 1 ท่า → Buffer ESC/POS (ต่อท้ายตัวใบเซียมซีได้ทันที ไม่มี ESC @ ไม่มีคำสั่งตัด)
+async function renderMascotOne(w, pose, opts, buildRaster) {
+  const height = await w.webContents.executeJavaScript(`window.renderMascot(${JSON.stringify({ img: pose.img, caption: pose.caption })}, ${JSON.stringify({ footer: opts.mascotFooter })})`);
+  w.setContentSize(SLIP_DOT_WIDTH, Math.max(60, height));
+  await delay(60);
+  const captured = await w.webContents.capturePage({ x: 0, y: 0, width: SLIP_DOT_WIDTH, height: Math.max(60, height) });
+  const resized = captured.resize({ width: SLIP_DOT_WIDTH, quality: 'best' });
+  const size = resized.getSize();
+  return buildRaster(resized.toBitmap(), size.width, size.height, { init: false, finish: false });
+}
+
+// เรนเดอร์มาสคอตทุกท่า (หน้าต่างของตัวเอง) → Buffer[]
+async function renderMascotAll(poses, opts, buildRaster, isStale = () => false) {
+  const w = await createWindow();
+  try {
+    const out = [];
+    for (const p of poses) { if (isStale()) return null; out.push(await renderMascotOne(w, p, opts, buildRaster)); }
+    return out;
+  } finally { destroyWindow(w); }
+}
+
+async function renderMascotSingle(pose, opts, buildRaster) {
+  const w = await createWindow();
+  try { return await renderMascotOne(w, pose, opts, buildRaster); } finally { destroyWindow(w); }
+}
+
 // เรนเดอร์ใบเดียวด้วยหน้าต่างใหม่ (ใช้ตอนแคชยังไม่พร้อม และปุ่มทดลองพิมพ์)
 async function renderSingle(fortune, opts, buildRaster) {
   const w = await createWindow();
@@ -72,4 +98,4 @@ async function renderAll(fortunes, opts, buildRaster, isStale = () => false) {
   }
 }
 
-module.exports = { renderAll, renderSingle, closeAll };
+module.exports = { renderAll, renderSingle, renderMascotAll, renderMascotSingle, closeAll };
