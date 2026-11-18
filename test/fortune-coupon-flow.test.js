@@ -14,7 +14,7 @@ const endsWithCut = (b) => b.subarray(b.length - CUT.length).equals(CUT);
 
 // ---- ของปลอม ----
 const sent = [];
-let failFirstSend = false, sendCalls = 0, failCoupon = false;
+let failFirstSend = false, sendCalls = 0, failCoupon = false, lastCoupon = null;
 cp.execFile = (file, args, opts, cb) => {
   sendCalls++;
   const i = args.indexOf('-FilePath');
@@ -25,7 +25,7 @@ cp.spawn = () => { const c = new EventEmitter(); c.stdout = new EventEmitter(); 
 const fakeRenderer = {
   renderAll: async () => new Array(100).fill(Buffer.from('SLP')),
   renderSingle: async () => Buffer.from('SLP'),
-  renderCoupon: async () => { if (failCoupon) throw new Error('boom'); return Buffer.from('CPN'); },
+  renderCoupon: async (c) => { lastCoupon = c; if (failCoupon) throw new Error('boom'); return Buffer.from('CPN'); },
   closeAll() {}
 };
 const electronStub = {
@@ -71,6 +71,10 @@ const run = async (name, fn) => { await fn(); n++; console.log('PASS ' + name); 
     assert.strictEqual(fm._getPending().peek(), null);
     const rec = fm._getStore().recent(5);
     assert.strictEqual(rec.length, 1); assert.strictEqual(rec[0].percent, 10); assert.strictEqual(rec[0].amount, 1200);
+    // บาร์โค้ดต้องเข้ารหัสรหัสดิบ (ไม่มีขีด) ตรงกับที่บันทึก เพื่อให้ปืนยิงแล้วตรวจเจอ
+    assert.strictEqual(lastCoupon.raw, rec[0].code);
+    assert.ok(/^SH[A-Z2-9]{6}$/.test(lastCoupon.raw), lastCoupon.raw);
+    assert.strictEqual(lastCoupon.code, 'SH-' + lastCoupon.raw.slice(2));
   });
   await run('two receipts in one batch → two slips, ONE coupon, one cut', async () => {
     setup(); fm._getPending().set('600'); await batch(['document', 'document']);

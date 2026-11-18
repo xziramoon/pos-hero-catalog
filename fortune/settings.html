@@ -135,6 +135,16 @@
     m.textContent = st[0] + (r.coupon ? ' · ลด ' + r.coupon.percent + '% · ออกเมื่อ ' + thDate(r.coupon.issuedAt) + ' · หมดอายุ ' + thDate(r.coupon.expiresAt) + (r.coupon.usedAt ? ' · ใช้เมื่อ ' + thDate(r.coupon.usedAt) : '') : '');
     $('useBtn').disabled = r.status !== 'valid';
   };
+  // ปืนยิงบาร์โค้ดพิมพ์รหัสแล้วส่ง Enter เอง → ตรวจทันที; ถ้าใช้ได้ย้ายโฟกัสไปปุ่ม "ใช้แล้ว" (Enter อีกครั้งเพื่อยืนยัน)
+  $('chkCode').addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return; e.preventDefault();
+    $('chk').click();
+  });
+  const origChk = $('chk').onclick;
+  $('chk').onclick = async () => {
+    await origChk();
+    if (!$('useBtn').disabled) $('useBtn').focus(); else { $('chkCode').focus(); $('chkCode').select(); }
+  };
   $('useBtn').onclick = async () => {
     const r = await window.fortuneApi.couponUse($('chkCode').value); const m = $('chkMsg'); $('useBtn').disabled = true;
     m.className = r.status === 'marked' ? 'ok' : 'bad';

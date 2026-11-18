@@ -46,10 +46,13 @@
   .cp .big { font-size: 76px; line-height: 1.1; margin: 4px 0; }
   .cp .code { font-size: 42px; letter-spacing: 5px; border: 4px solid #000; border-radius: 10px; padding: 6px 8px; margin: 8px 24px; font-family: Consolas, 'Courier New', monospace; }
   .cp .n { font-size: 23px; line-height: 1.4; }
+  .cp .bc { margin: 6px 0 8px; line-height: 0; }
+  .cp .bc svg { display: block; margin: 0 auto; }
 </style>
 </head>
 <body>
 <div id="slip"></div>
+<script src="code128.js"></script>
 <script>
   var KRATHONG_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 100" width="120" height="100"><g fill="#fff" stroke="#000" stroke-width="3" stroke-linejoin="round" stroke-linecap="round">' +
     '<path d="M16 66 L26 44 L36 66Z"/><path d="M34 66 L44 44 L54 66Z"/><path d="M50 66 L60 44 L70 66Z"/><path d="M66 66 L76 44 L86 66Z"/><path d="M84 66 L94 44 L104 66Z"/>' +
@@ -105,7 +108,23 @@
     return Math.ceil(el.getBoundingClientRect().height);
   };
 
-  // c = { percent, code ("SH-ABC234"), expires ("วว/ดด/ปปปป" พ.ศ.") } — คืนความสูง (px)
+  // บาร์โค้ด Code128 กว้างโมดูลละ 3px (ชัดพอสำหรับปืนยิงบนเครื่อง 203dpi) + quiet zone 10 โมดูลสองข้าง
+  function barcodeSvg(text) {
+    var bits = window.Code128 && window.Code128.encode(text);
+    if (!bits) return '';
+    var M = 3, Q = 10, rects = '', i = 0;
+    while (i < bits.length) {
+      if (bits.charAt(i) === '1') {
+        var j = i; while (j < bits.length && bits.charAt(j) === '1') j++;
+        rects += '<rect x="' + (i + Q) * M + '" y="0" width="' + (j - i) * M + '" height="100"/>';
+        i = j;
+      } else i++;
+    }
+    var w = (bits.length + Q * 2) * M;
+    return '<div class="bc"><svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="100" viewBox="0 0 ' + w + ' 100" shape-rendering="crispEdges" fill="#000">' + rects + '</svg></div>';
+  }
+
+  // c = { percent, code ("SH-ABC234"), raw ("SHABC234" ใช้เข้ารหัสบาร์โค้ด), expires ("วว/ดด/ปปปป" พ.ศ.") } — คืนความสูง (px)
   window.renderCoupon = function (c) {
     var el = document.getElementById('slip');
     el.innerHTML = '<div class="cp"><div class="cut"></div>' +
@@ -113,6 +132,7 @@
       '<div class="big">ลด ' + esc(c.percent) + '%</div>' +
       '<div class="n">ใช้ได้ครั้งเดียว สำหรับการซื้อครั้งหน้า</div>' +
       '<div class="code">' + esc(c.code) + '</div>' +
+      barcodeSvg(c.raw || c.code) +
       '<div class="n">หมดอายุ ' + esc(c.expires) + '</div>' +
       '<div class="n">ยื่นคูปองนี้ให้พนักงานก่อนชำระเงิน</div></div>';
     return Math.ceil(el.getBoundingClientRect().height);

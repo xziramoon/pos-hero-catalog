@@ -170,7 +170,7 @@ async function buildCoupon() {
   const tier = coupon.pickTier(settings.couponTiers, amount);
   if (!tier) { log('# coupon: amount below first tier → plain slip'); return null; }
   const record = couponStore.mint({ amount, percent: tier.percent, prefix: settings.couponPrefix, validDays: settings.couponValidDays });
-  const buf = await withTimeout(slipRenderer.renderCoupon({ percent: record.percent, code: coupon.displayCode(record.code), expires: coupon.thaiDate(record.expiresAt) }, ctx.buildRaster), 10000, 'render coupon');
+  const buf = await withTimeout(slipRenderer.renderCoupon({ percent: record.percent, code: coupon.displayCode(record.code), raw: coupon.normalizeCode(record.code), expires: coupon.thaiDate(record.expiresAt) }, ctx.buildRaster), 10000, 'render coupon');
   return { record, buf };
 }
 
