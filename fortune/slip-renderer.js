@@ -56,6 +56,20 @@ async function renderSingle(fortune, opts, buildRaster) {
   try { return await renderOne(w, fortune, opts, buildRaster); } finally { destroyWindow(w); }
 }
 
+// เรนเดอร์ใบคูปอง 1 ใบ → Buffer ESC/POS (ไม่มี ESC @ ไม่มีคำสั่งตัด) ด้วยหน้าต่างใหม่ที่ทำลายทิ้งหลังใช้
+async function renderCoupon(c, buildRaster) {
+  const w = await createWindow();
+  try {
+    const height = await w.webContents.executeJavaScript(`window.renderCoupon(${JSON.stringify(c)})`);
+    w.setContentSize(SLIP_DOT_WIDTH, Math.max(100, height));
+    await delay(60);
+    const captured = await w.webContents.capturePage({ x: 0, y: 0, width: SLIP_DOT_WIDTH, height: Math.max(100, height) });
+    const resized = captured.resize({ width: SLIP_DOT_WIDTH, quality: 'best' });
+    const size = resized.getSize();
+    return buildRaster(resized.toBitmap(), size.width, size.height, { init: false, finish: false });
+  } finally { destroyWindow(w); }
+}
+
 // opts: { theme, showZh, showTh, footer } (จาก logic.renderOptions) — ต้องเรียกใหม่ทุกครั้งที่ตัวเลือกเปลี่ยน
 // isStale() คืน true ถ้ามีงานเรนเดอร์ที่ใหม่กว่าเริ่มแล้ว (ยกเลิกรอบเก่า → คืน null)
 async function renderAll(fortunes, opts, buildRaster, isStale = () => false) {
@@ -72,4 +86,4 @@ async function renderAll(fortunes, opts, buildRaster, isStale = () => false) {
   }
 }
 
-module.exports = { renderAll, renderSingle, closeAll };
+module.exports = { renderAll, renderSingle, renderCoupon, closeAll };

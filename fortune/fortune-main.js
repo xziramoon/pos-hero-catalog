@@ -7,6 +7,8 @@ const { spawn, execFile } = require('child_process');
 const { BrowserWindow, Notification, ipcMain, clipboard, shell } = require('electron');
 const logic = require('./logic');
 const slipRenderer = require('./slip-renderer');
+let coupon = null; // คูปองพังต้องไม่ทำให้เซียมซี/การตัดกระดาษพัง — โหลดไม่ได้ = ไม่มีคูปอง
+try { coupon = require('./coupon-core'); } catch (e) { console.warn('[fortune] coupon-core load failed:', e && e.message); }
 
 const FORTUNES = require('./fortunes.json');
 const HEARTBEAT_STALE_MS = 30 * 1000;
@@ -40,6 +42,9 @@ const batcher = logic.makeBatcher({
 const dedup = logic.makeDedup(200);
 let stats = { date: logic.localDateStr(new Date()), count: 0 };
 let settingsWin = null;
+let amountWin = null;
+let pending = null;       // ยอดบิลที่แคชเชียร์กรอกไว้รอบิลถัดไป (ใช้ครั้งเดียว)
+let couponStore = null;   // ประวัติคูปองที่ออก
 let onChange = () => {};
 
 function log(line) {
@@ -133,10 +138,18 @@ async function handleBatch(evts) {
       const parts = [];
       const picked = [];
       for (let i = 0; i < slipCount; i++) { const idx = logic.pickIndex(FORTUNES, settings); picked.push(idx + 1); parts.push(await getSlipBytes(idx)); }
+      // คูปองต่อท้ายเซียมซีก่อนคำสั่งตัด (หนึ่งชุด = หนึ่งคูปอง) พลาดตรงไหน = พิมพ์เซียมซีเดิม ใบเสร็จต้องถูกตัดเสมอ
+      let minted = null;
+      try { minted = await buildCoupon(); if (minted) parts.push(minted.buf); } catch (e) { minted = null; log(`# coupon skipped: ${e && e.message}`); }
       parts.push(logic.FEED_AND_CUT);
       await sendBytes(Buffer.concat(parts));
       for (let i = 0; i < slipCount; i++) bumpStats();
       log(`# slip #${picked.join(',#')} sent for jobs [${ids}]`);
+      if (minted) {
+        const saved = couponStore.commit(minted.record);
+        log(`# coupon ${minted.record.percent}% issued ${coupon.displayCode(minted.record.code)}${saved ? '' : ' (SAVE FAILED)'}`);
+        if (!saved) notify('บันทึกคูปองไม่สำเร็จ', 'คูปองถูกพิมพ์แล้วแต่ตรวจรหัสในเครื่องนี้ไม่ได้ — จดรหัส ' + coupon.displayCode(minted.record.code));
+      }
       return;
     } catch (e) {
       log(`# slip failed for jobs [${ids}] (${e && e.message}) → cut only`);
@@ -146,6 +159,66 @@ async function handleBatch(evts) {
   }
   try { await sendBytes(logic.FEED_AND_CUT); log(`# cut sent for jobs [${ids}]`); }
   catch (e) { log(`# cut failed for jobs [${ids}]: ${e && e.message}`); notify('POS Hero: ตัดกระดาษไม่สำเร็จ', 'ตรวจสอบเครื่องพิมพ์ หรือตั้งไดรเวอร์ Paper Cut กลับเป็น Cut'); }
+}
+
+// ---------- คูปองส่วนลดตามยอด ----------
+// ใช้ยอดค้าง (ครั้งเดียว) → เลือกขั้น → สร้างรหัส + เรนเดอร์ใบ; ไม่ออกคูปอง = null; เรียกผ่าน try เสมอ
+async function buildCoupon() {
+  if (!coupon || !couponStore || !pending || !settings.couponEnabled) return null;
+  const amount = pending.take();
+  if (amount == null) { log('# coupon: no pending amount → plain slip'); return null; }
+  const tier = coupon.pickTier(settings.couponTiers, amount);
+  if (!tier) { log('# coupon: amount below first tier → plain slip'); return null; }
+  const record = couponStore.mint({ amount, percent: tier.percent, prefix: settings.couponPrefix, validDays: settings.couponValidDays });
+  const buf = await withTimeout(slipRenderer.renderCoupon({ percent: record.percent, code: coupon.displayCode(record.code), expires: coupon.thaiDate(record.expiresAt) }, ctx.buildRaster), 10000, 'render coupon');
+  return { record, buf };
+}
+
+function amountInfo() {
+  const amount = pending ? pending.peek() : null;
+  const tier = amount != null && coupon ? coupon.pickTier(settings.couponTiers, amount) : null;
+  return {
+    couponEnabled: !!settings.couponEnabled && !!coupon && !!couponStore,
+    amount, remainingMs: pending ? pending.remainingMs() : 0,
+    percent: tier ? tier.percent : null,
+    tiers: coupon ? coupon.normalizeTiers(settings.couponTiers) : []
+  };
+}
+
+// หน้าต่างเล็กลอยค้างสำหรับกรอกยอดบิล (พิมพ์ยอด → Enter → ใช้กับใบเสร็จถัดไปครั้งเดียว)
+function openAmount() {
+  if (amountWin && !amountWin.isDestroyed()) { amountWin.show(); amountWin.focus(); return; }
+  amountWin = new BrowserWindow({
+    width: 320, height: 250, title: 'ยอดบิล (คูปอง)', autoHideMenuBar: true, minimizable: false, maximizable: false, resizable: false,
+    alwaysOnTop: true,
+    webPreferences: { preload: path.join(__dirname, 'amount-preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true }
+  });
+  amountWin.setMenu(null);
+  amountWin.setAlwaysOnTop(true, 'floating');
+  try {
+    const { screen } = require('electron');
+    const wa = screen.getPrimaryDisplay().workArea;
+    amountWin.setPosition(wa.x + wa.width - 340, wa.y + wa.height - 270);
+  } catch (e) { /* ใช้ตำแหน่งตั้งต้น */ }
+  amountWin.loadFile(path.join(__dirname, 'amount.html'));
+  amountWin.on('closed', () => { amountWin = null; });
+}
+
+function registerCouponIpc() {
+  ipcMain.handle('fortune:amount-get', () => { try { return amountInfo(); } catch (e) { return { couponEnabled: false, amount: null, remainingMs: 0, percent: null, tiers: [] }; } });
+  ipcMain.handle('fortune:amount-set', (_e, raw) => {
+    try {
+      if (!pending || !pending.set(raw)) return { ok: false, reason: 'ใส่ยอดเป็นตัวเลข เช่น 850 หรือ 1,250' };
+      return { ok: true, info: amountInfo() };
+    } catch (e) { return { ok: false, reason: e && e.message ? e.message : String(e) }; }
+  });
+  ipcMain.handle('fortune:amount-clear', () => { try { if (pending) pending.clear(); } catch (e) { /* ignore */ } return { ok: true }; });
+  ipcMain.handle('fortune:coupon-check', (_e, code) => {
+    try { return couponStore ? { ok: true, ...couponStore.check(code) } : { ok: false, reason: 'ระบบคูปองไม่พร้อมใช้งาน' }; } catch (e) { return { ok: false, reason: e && e.message ? e.message : String(e) }; }
+  });
+  ipcMain.handle('fortune:coupon-use', (_e, code) => {
+    try { return couponStore ? { ok: true, ...couponStore.markUsed(code) } : { ok: false, reason: 'ระบบคูปองไม่พร้อมใช้งาน' }; } catch (e) { return { ok: false, reason: e && e.message ? e.message : String(e) }; }
+  });
 }
 
 function onWatcherEvent(evt) {
@@ -343,6 +416,7 @@ function trayItems() {
   const modeText = { off: 'ปิด', record: 'บันทึกอย่างเดียว', on: 'เปิด' }[settings.mode];
   return [
     { label: `🔮 เซียมซี: ${modeText} · วันนี้ ${todayCount()} ใบ`, click: () => openSettings() },
+    { label: '🧾 ยอดบิล (คูปอง)', click: () => { try { openAmount(); } catch (e) { /* ignore */ } } },
     { type: 'separator' }
   ];
 }
@@ -350,7 +424,7 @@ function trayItems() {
 function openSettings() {
   if (settingsWin && !settingsWin.isDestroyed()) { settingsWin.show(); settingsWin.focus(); return; }
   settingsWin = new BrowserWindow({
-    width: 460, height: 720, title: 'ตั้งค่าเซียมซี', autoHideMenuBar: true, resizable: true,
+    width: 480, height: 860, title: 'ตั้งค่าเซียมซี', autoHideMenuBar: true, resizable: true,
     webPreferences: { preload: path.join(__dirname, 'preload-fortune.js'), contextIsolation: true, nodeIntegration: false, sandbox: true }
   });
   settingsWin.setMenu(null);
@@ -364,6 +438,13 @@ function init(context) {
   settingsFile = path.join(dir, 'fortune-settings.json');
   logFile = path.join(dir, 'fortune-jobs.log');
   loadSettings();
+  try {
+    if (coupon) {
+      pending = coupon.createPending();
+      couponStore = coupon.createCouponStore({ file: path.join(dir, 'fortune-coupons.json') });
+      registerCouponIpc();
+    }
+  } catch (e) { pending = null; couponStore = null; log(`# coupon init failed: ${e && e.message}`); }
   onChange = () => {
     try { if (ctx.onChange) ctx.onChange(); } catch (e) { /* ignore */ }
     try { if (settingsWin && !settingsWin.isDestroyed()) settingsWin.webContents.send('fortune:state', getState()); } catch (e) { /* ignore */ }
@@ -389,4 +470,4 @@ function init(context) {
 
 function shutdown() { if (themeTimer) clearInterval(themeTimer); stopWatcher(true); slipRenderer.closeAll(); }
 
-module.exports = { init, shutdown, trayItems, openSettings };
+module.exports = { init, shutdown, trayItems, openSettings, openAmount, _handleBatch: handleBatch, _getPending: () => pending, _getStore: () => couponStore }; // _ = สำหรับ test เท่านั้น

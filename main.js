@@ -587,6 +587,7 @@ ipcMain.on('window:toggle-pin', () => {
 
 ipcMain.handle('window:get-pin-state', () => isPinned);
 
+ipcMain.on('fortune:open-amount', () => { try { if (fortune) fortune.openAmount(); } catch (e) { /* ignore */ } });
 ipcMain.on('catalog:toggle', () => { try { if (catalog) catalog.toggleCatalog(); } catch (e) { /* ignore */ } });
 
 ipcMain.on('window:dock-to-corner', () => {

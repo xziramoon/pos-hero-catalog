@@ -38,6 +38,14 @@
   .kr .m b { font-weight: 700; }
   .kr .ft { text-align: center; font-size: 19px; margin-top: 10px; line-height: 1.4; }
   .kr.nopoem .hd { margin-bottom: 8px; }
+
+  /* ---------- คูปองส่วนลด ---------- */
+  .cp { padding: 6px 18px 14px; text-align: center; }
+  .cp .cut { border-top: 3px dashed #000; margin: 4px 0 10px; }
+  .cp .t { font-size: 30px; line-height: 1.3; }
+  .cp .big { font-size: 76px; line-height: 1.1; margin: 4px 0; }
+  .cp .code { font-size: 42px; letter-spacing: 5px; border: 4px solid #000; border-radius: 10px; padding: 6px 8px; margin: 8px 24px; font-family: Consolas, 'Courier New', monospace; }
+  .cp .n { font-size: 23px; line-height: 1.4; }
 </style>
 </head>
 <body>
@@ -94,6 +102,19 @@
   window.renderSlip = function (slip, opts) {
     var el = document.getElementById('slip');
     el.innerHTML = opts.theme === 'krathong' ? renderKrathong(slip, opts) : renderNewYear(slip, opts);
+    return Math.ceil(el.getBoundingClientRect().height);
+  };
+
+  // c = { percent, code ("SH-ABC234"), expires ("วว/ดด/ปปปป" พ.ศ.") } — คืนความสูง (px)
+  window.renderCoupon = function (c) {
+    var el = document.getElementById('slip');
+    el.innerHTML = '<div class="cp"><div class="cut"></div>' +
+      '<div class="t">คูปองส่วนลด</div>' +
+      '<div class="big">ลด ' + esc(c.percent) + '%</div>' +
+      '<div class="n">ใช้ได้ครั้งเดียว สำหรับการซื้อครั้งหน้า</div>' +
+      '<div class="code">' + esc(c.code) + '</div>' +
+      '<div class="n">หมดอายุ ' + esc(c.expires) + '</div>' +
+      '<div class="n">ยื่นคูปองนี้ให้พนักงานก่อนชำระเงิน</div></div>';
     return Math.ceil(el.getBoundingClientRect().height);
   };
 </script>
