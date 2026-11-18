@@ -475,11 +475,64 @@ function getState() {
   };
 }
 
+// ---------- เก็บตัวอย่างไฟล์ spool ของบิล POS (ไว้ดูว่าอ่านรายการจากบิลอัตโนมัติได้ไหม) ----------
+// ต้องใช้สิทธิ์ผู้ดูแลเพื่ออ่านโฟลเดอร์ spool → ขอ UAC ครั้งเดียว สคริปต์หยุดเองเมื่อครบ 8 งาน/30 นาที (หรือกดหยุดจากเมนูถาด)
+let captureTimer = null;
+function samplesDir() { return path.join(ctx.app.getPath('userData'), 'spool-samples'); }
+const psq = (s) => String(s).replace(/'/g, "''");
+
+function startSpoolCapture() {
+  if (captureTimer) return;
+  const dir = samplesDir();
+  try { fs.mkdirSync(dir, { recursive: true }); fs.unlinkSync(path.join(dir, 'DONE')); } catch (e) { /* ไม่มีไฟล์เก่า */ }
+  const script = unpackedPath('fortune', 'spool-capture.ps1');
+  const args = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', `"${script}"`, '-Dest', `"${dir}"`, '-MaxJobs', '8', '-MaxMinutes', '30'].map((a) => `'${psq(a)}'`).join(',');
+  captureTimer = setInterval(() => {}, 1 << 30); // กันกดซ้ำระหว่างรอ UAC; แทนที่ด้วยตัวจับเวลาจริงด้านล่าง
+  execFile('powershell.exe', ['-NoProfile', '-Command', `Start-Process powershell.exe -Verb RunAs -WindowStyle Hidden -ArgumentList ${args}`],
+    { windowsHide: true, timeout: 120000 }, (error) => {
+      if (error) {
+        clearInterval(captureTimer); captureTimer = null; onChange();
+        log(`# spool capture not started: ${error.message}`);
+        notify('เก็บตัวอย่างบิลไม่สำเร็จ', 'ต้องกดอนุญาต (สิทธิ์ผู้ดูแล) ในหน้าต่างที่เด้งขึ้นมา');
+        return;
+      }
+      clearInterval(captureTimer);
+      const startedAt = Date.now();
+      captureTimer = setInterval(() => {
+        let finished = false, n = '';
+        try { n = fs.readFileSync(path.join(dir, 'DONE'), 'utf8').trim(); finished = true; } catch (e) { /* ยังเก็บอยู่ */ }
+        if (!finished && Date.now() - startedAt < 35 * 60 * 1000) return;
+        clearInterval(captureTimer); captureTimer = null; onChange();
+        log(`# spool capture finished (${finished ? n + ' jobs' : 'timeout'})`);
+        notify('เก็บตัวอย่างบิลเสร็จแล้ว', finished ? `ได้ ${n} งาน — ส่งไฟล์ samples.zip ในโฟลเดอร์ที่เปิดให้` : 'หมดเวลา ลองเปิดโฟลเดอร์ดูไฟล์ที่ได้');
+        try { const z = path.join(dir, 'samples.zip'); if (fs.existsSync(z)) shell.showItemInFolder(z); else shell.openPath(dir); } catch (e) { /* ignore */ }
+      }, 3000);
+      onChange();
+      log('# spool capture started');
+      notify('เริ่มเก็บตัวอย่างบิลแล้ว', 'พิมพ์บิลจริง 3-5 ใบ (หลายรายการ ต่างกัน) — ครบแล้วจะแจ้งและเปิดโฟลเดอร์ให้');
+    });
+  onChange();
+}
+
+function stopSpoolCapture() {
+  try { fs.writeFileSync(path.join(samplesDir(), 'STOP'), '1'); } catch (e) { /* ignore */ }
+  notify('กำลังหยุดเก็บตัวอย่างบิล', 'รอสักครู่ จะแจ้งเมื่อเสร็จ');
+}
+
+function openSamplesFolder() {
+  const dir = samplesDir();
+  try { fs.mkdirSync(dir, { recursive: true }); shell.openPath(dir); } catch (e) { /* ignore */ }
+}
+
 function trayItems() {
   const modeText = { off: 'ปิด', record: 'บันทึกอย่างเดียว', on: 'เปิด' }[settings.mode];
   return [
     { label: `🔮 เซียมซี: ${modeText} · วันนี้ ${todayCount()} ใบ`, click: () => openSettings() },
     { label: '🧾 ยอดบิล (คูปอง)', click: () => { try { openAmount(); } catch (e) { /* ignore */ } } },
+    captureTimer
+      ? { label: '⏹ หยุดเก็บตัวอย่างบิล', click: () => stopSpoolCapture() }
+      : { label: '📥 เก็บตัวอย่างบิล (ขอสิทธิ์ผู้ดูแล)', click: () => { try { startSpoolCapture(); } catch (e) { /* ignore */ } } },
+    { label: '📂 เปิดโฟลเดอร์ตัวอย่างบิล', click: () => openSamplesFolder() },
     { type: 'separator' }
   ];
 }
@@ -532,6 +585,6 @@ function init(context) {
   if (settings.mode !== 'off') startWatcher().catch(() => {});
 }
 
-function shutdown() { if (themeTimer) clearInterval(themeTimer); stopWatcher(true); slipRenderer.closeAll(); }
+function shutdown() { if (themeTimer) clearInterval(themeTimer); if (captureTimer) clearInterval(captureTimer); stopWatcher(true); slipRenderer.closeAll(); }
 
 module.exports = { init, shutdown, trayItems, openSettings, openAmount, _handleBatch: handleBatch, _getPending: () => pending, _getBasket: () => basket, _basketScan: (t) => basketScan(t), _basketScan: (t) => basketScan(t), _getStore: () => couponStore }; // _ = สำหรับ test เท่านั้น
