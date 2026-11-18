@@ -69,6 +69,15 @@
     <div class="hint">คั่นแต่ละขั้นด้วย ; เช่น 500:5; 1000:10 = ยอดตั้งแต่ 500 ลด 5% · ตั้งแต่ 1000 ลด 10%</div></div>
   <div class="row dates"><div style="flex:1"><span class="lbl">อายุคูปอง (วัน)</span><input type="text" id="couponValidDays" inputmode="numeric"></div>
     <div style="flex:1"><span class="lbl">ตัวนำหน้ารหัส (A-Z/0-9 ไม่เกิน 4 ตัว)</span><input type="text" id="couponPrefix" maxlength="4"></div></div>
+  <div class="row"><span class="lbl">คูปองรายสินค้า (ยิงสินค้าที่หน้าต่าง "🧾 ยอดบิล" ก่อนพิมพ์บิล)</span>
+    <div id="rules"></div>
+    <div class="dates"><input type="text" id="rSearch" placeholder="ค้นหาสินค้า (ชื่อ/รหัส/บาร์โค้ด) แล้ว Enter"></div>
+    <div id="rPick" style="margin:4px 0"></div>
+    <div class="dates" id="rForm" style="display:none;align-items:center"><b id="rName" style="flex:2"></b>
+      <input type="text" id="rQty" value="1" inputmode="numeric" style="width:54px" title="ซื้อขั้นต่ำกี่ชิ้น"><span>ชิ้นขึ้นไป ลด</span>
+      <input type="text" id="rVal" inputmode="decimal" style="width:64px"><select id="rKind"><option value="baht">บาท</option><option value="percent">%</option></select>
+      <button id="rAdd" type="button">เพิ่มกฎ</button></div>
+    <div class="hint">1 กฎ = 1 สินค้า · ซื้อครบจำนวนที่ตั้ง ได้คูปอง 1 ใบ · แล้วกด 💾 บันทึก · สินค้าต้องอยู่ในแคตตาล็อก (ใส่บาร์โค้ดไว้เพื่อให้ยิงได้)</div></div>
   <div class="row"><span class="lbl">ตรวจรหัสคูปอง</span>
     <div class="dates"><input type="text" id="chkCode" placeholder="เช่น SH-ABC234"><button id="chk">ตรวจ</button><button id="useBtn" disabled>ทำเครื่องหมายว่าใช้แล้ว</button></div>
     <div id="chkMsg" style="margin-top:6px;min-height:20px"></div></div>
@@ -88,6 +97,12 @@
   const textToTiers = (s) => String(s || '').split(/[;\n]/).map((p) => p.trim().split(':')).filter((a) => a.length === 2)
     .map((a) => ({ min: Number(a[0].replace(/[^0-9.]/g, '')), percent: Number(a[1].replace(/[^0-9.]/g, '')) }));
   let printersLoaded = false;
+  let rules = [], picked = null;
+  const escH = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const rewardTxt = (r) => (r.kind === 'percent' ? 'ลด ' + r.value + '%' : 'ลด ' + r.value + ' บาท');
+  function drawRules() {
+    $('rules').innerHTML = rules.length ? rules.map((r, i) => '<div class="dates" style="align-items:center;margin-bottom:4px"><span style="flex:1">' + escH(r.name) + ' — ซื้อ ' + r.minQty + ' ชิ้นขึ้นไป ' + rewardTxt(r) + '</span><button type="button" data-del="' + i + '">ลบ</button></div>').join('') : '<div class="hint">ยังไม่มีกฎ</div>';
+  }
 
   function setStatus(msg, ok) { const s = $('status'); s.textContent = msg; s.className = ok === undefined ? '' : (ok ? 'ok' : 'bad'); }
 
@@ -109,6 +124,7 @@
       bools.forEach((k) => { $(k).checked = !!s[k]; });
       texts.forEach((k) => { $(k).value = s[k] || ''; });
       $('couponTiers').value = tiersToText(s.couponTiers);
+      rules = (s.promoRules || []).map((r) => ({ ...r })); drawRules();
       await fillPrinters(s.printerName);
     }
     $('stat').textContent = `พิมพ์วันนี้ ${state.todayCount} ใบ · ` +
@@ -123,6 +139,7 @@
     texts.forEach((k) => { o[k] = $(k).value; });
     o.printerName = $('printerName').value;
     o.couponTiers = textToTiers($('couponTiers').value);
+    o.promoRules = rules;
     return o;
   }
 
@@ -132,7 +149,7 @@
     const r = await window.fortuneApi.couponCheck($('chkCode').value); const m = $('chkMsg'); $('useBtn').disabled = true;
     if (!r.ok) { m.className = 'bad'; m.textContent = r.reason || 'ตรวจไม่สำเร็จ'; return; }
     const st = ST[r.status] || ['?', 'bad']; m.className = st[1];
-    m.textContent = st[0] + (r.coupon ? ' · ลด ' + r.coupon.percent + '% · ออกเมื่อ ' + thDate(r.coupon.issuedAt) + ' · หมดอายุ ' + thDate(r.coupon.expiresAt) + (r.coupon.usedAt ? ' · ใช้เมื่อ ' + thDate(r.coupon.usedAt) : '') : '');
+    m.textContent = st[0] + (r.coupon ? ' · ' + (r.coupon.type === 'product' ? r.coupon.name + ' ' + rewardTxt(r.coupon) : 'ลด ' + r.coupon.percent + '%') + ' · ออกเมื่อ ' + thDate(r.coupon.issuedAt) + ' · หมดอายุ ' + thDate(r.coupon.expiresAt) + (r.coupon.usedAt ? ' · ใช้เมื่อ ' + thDate(r.coupon.usedAt) : '') : '');
     $('useBtn').disabled = r.status !== 'valid';
   };
   // ปืนยิงบาร์โค้ดพิมพ์รหัสแล้วส่ง Enter เอง → ตรวจทันที; ถ้าใช้ได้ย้ายโฟกัสไปปุ่ม "ใช้แล้ว" (Enter อีกครั้งเพื่อยืนยัน)
@@ -144,6 +161,25 @@
   $('chk').onclick = async () => {
     await origChk();
     if (!$('useBtn').disabled) $('useBtn').focus(); else { $('chkCode').focus(); $('chkCode').select(); }
+  };
+  $('rules').addEventListener('click', (e) => { const i = e.target.getAttribute && e.target.getAttribute('data-del'); if (i != null) { rules.splice(Number(i), 1); drawRules(); } });
+  async function rSearch() {
+    const list = await window.fortuneApi.promoSearch($('rSearch').value); const p = $('rPick');
+    p.innerHTML = list.length ? list.map((x) => '<button type="button" data-id="' + escH(x.id) + '" data-n="' + escH(x.name) + '" style="margin:2px">' + escH(x.name) + '</button>').join('') : '<span class="hint">ไม่พบสินค้า</span>';
+  }
+  $('rSearch').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); rSearch(); } });
+  $('rPick').addEventListener('click', (e) => {
+    const id = e.target.getAttribute && e.target.getAttribute('data-id'); if (!id) return;
+    picked = { id, name: e.target.getAttribute('data-n') }; $('rName').textContent = picked.name; $('rForm').style.display = 'flex'; $('rPick').innerHTML = ''; $('rVal').focus();
+  });
+  $('rAdd').onclick = () => {
+    if (!picked) return; const value = Number(String($('rVal').value).replace(/[^0-9.]/g, ''));
+    if (!(value > 0)) { setStatus('ใส่ส่วนลดเป็นตัวเลข', false); return; }
+    const kind = $('rKind').value; if (kind === 'percent' && value > 100) { setStatus('ลดเป็น % ต้องไม่เกิน 100', false); return; }
+    const minQty = Math.max(1, Math.floor(Number($('rQty').value)) || 1);
+    rules = rules.filter((r) => r.itemId !== picked.id).concat([{ itemId: picked.id, name: picked.name, minQty, kind, value }]);
+    drawRules(); picked = null; $('rForm').style.display = 'none'; $('rSearch').value = ''; $('rVal').value = '';
+    setStatus('เพิ่มกฎแล้ว — อย่าลืมกด 💾 บันทึก', true);
   };
   $('useBtn').onclick = async () => {
     const r = await window.fortuneApi.couponUse($('chkCode').value); const m = $('chkMsg'); $('useBtn').disabled = true;

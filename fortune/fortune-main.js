@@ -9,6 +9,8 @@ const logic = require('./logic');
 const slipRenderer = require('./slip-renderer');
 let coupon = null; // คูปองพังต้องไม่ทำให้เซียมซี/การตัดกระดาษพัง — โหลดไม่ได้ = ไม่มีคูปอง
 try { coupon = require('./coupon-core'); } catch (e) { console.warn('[fortune] coupon-core load failed:', e && e.message); }
+let promo = null; // กฎคูปองรายสินค้า — โหลดไม่ได้ = ไม่มีคูปองรายสินค้า
+try { promo = require('./promo-core'); } catch (e) { console.warn('[fortune] promo-core load failed:', e && e.message); }
 
 const FORTUNES = require('./fortunes.json');
 const HEARTBEAT_STALE_MS = 30 * 1000;
@@ -43,6 +45,7 @@ const dedup = logic.makeDedup(200);
 let stats = { date: logic.localDateStr(new Date()), count: 0 };
 let settingsWin = null;
 let amountWin = null;
+let basket = null;        // สินค้าที่แคชเชียร์ยิงไว้ของบิลถัดไป (ใช้ครั้งเดียว)
 let pending = null;       // ยอดบิลที่แคชเชียร์กรอกไว้รอบิลถัดไป (ใช้ครั้งเดียว)
 let couponStore = null;   // ประวัติคูปองที่ออก
 let onChange = () => {};
@@ -139,16 +142,16 @@ async function handleBatch(evts) {
       const picked = [];
       for (let i = 0; i < slipCount; i++) { const idx = logic.pickIndex(FORTUNES, settings); picked.push(idx + 1); parts.push(await getSlipBytes(idx)); }
       // คูปองต่อท้ายเซียมซีก่อนคำสั่งตัด (หนึ่งชุด = หนึ่งคูปอง) พลาดตรงไหน = พิมพ์เซียมซีเดิม ใบเสร็จต้องถูกตัดเสมอ
-      let minted = null;
-      try { minted = await buildCoupon(); if (minted) parts.push(minted.buf); } catch (e) { minted = null; log(`# coupon skipped: ${e && e.message}`); }
+      let minted = [];
+      try { minted = await buildCoupons(); for (const m of minted) parts.push(m.buf); } catch (e) { minted = []; log(`# coupon skipped: ${e && e.message}`); }
       parts.push(logic.FEED_AND_CUT);
       await sendBytes(Buffer.concat(parts));
       for (let i = 0; i < slipCount; i++) bumpStats();
       log(`# slip #${picked.join(',#')} sent for jobs [${ids}]`);
-      if (minted) {
-        const saved = couponStore.commit(minted.record);
-        log(`# coupon ${minted.record.percent}% issued ${coupon.displayCode(minted.record.code)}${saved ? '' : ' (SAVE FAILED)'}`);
-        if (!saved) notify('บันทึกคูปองไม่สำเร็จ', 'คูปองถูกพิมพ์แล้วแต่ตรวจรหัสในเครื่องนี้ไม่ได้ — จดรหัส ' + coupon.displayCode(minted.record.code));
+      for (const m of minted) {
+        const saved = couponStore.commit(m.record);
+        log(`# coupon ${m.label} issued ${coupon.displayCode(m.record.code)}${saved ? '' : ' (SAVE FAILED)'}`);
+        if (!saved) notify('บันทึกคูปองไม่สำเร็จ', 'คูปองถูกพิมพ์แล้วแต่ตรวจรหัสในเครื่องนี้ไม่ได้ — จดรหัส ' + coupon.displayCode(m.record.code));
       }
       return;
     } catch (e) {
@@ -161,17 +164,71 @@ async function handleBatch(evts) {
   catch (e) { log(`# cut failed for jobs [${ids}]: ${e && e.message}`); notify('POS Hero: ตัดกระดาษไม่สำเร็จ', 'ตรวจสอบเครื่องพิมพ์ หรือตั้งไดรเวอร์ Paper Cut กลับเป็น Cut'); }
 }
 
-// ---------- คูปองส่วนลดตามยอด ----------
-// ใช้ยอดค้าง (ครั้งเดียว) → เลือกขั้น → สร้างรหัส + เรนเดอร์ใบ; ไม่ออกคูปอง = null; เรียกผ่าน try เสมอ
-async function buildCoupon() {
-  if (!coupon || !couponStore || !pending || !settings.couponEnabled) return null;
-  const amount = pending.take();
-  if (amount == null) { log('# coupon: no pending amount → plain slip'); return null; }
-  const tier = coupon.pickTier(settings.couponTiers, amount);
-  if (!tier) { log('# coupon: amount below first tier → plain slip'); return null; }
-  const record = couponStore.mint({ amount, percent: tier.percent, prefix: settings.couponPrefix, validDays: settings.couponValidDays });
-  const buf = await withTimeout(slipRenderer.renderCoupon({ percent: record.percent, code: coupon.displayCode(record.code), raw: coupon.normalizeCode(record.code), expires: coupon.thaiDate(record.expiresAt) }, ctx.buildRaster), 10000, 'render coupon');
-  return { record, buf };
+// ---------- คูปองส่วนลด (ตามยอด + รายสินค้า) ----------
+// ออกคูปองของบิลนี้: คูปองตามยอด (0-1 ใบ) + คูปองรายสินค้า (กฎละ 1 ใบ สูงสุด 3) — ใบไหนพลาดก็ข้ามเฉพาะใบนั้น; เรียกผ่าน try เสมอ
+const MAX_PRODUCT_COUPONS = 3;
+function renderRecord(c) { return withTimeout(slipRenderer.renderCoupon(c, ctx.buildRaster), 10000, 'render coupon'); }
+async function buildCoupons() {
+  if (!coupon || !couponStore || !settings.couponEnabled) return [];
+  const out = [];
+  const amount = pending ? pending.take() : null;
+  const tier = amount != null ? coupon.pickTier(settings.couponTiers, amount) : null;
+  if (amount == null) log('# coupon: no pending amount');
+  else if (!tier) log('# coupon: amount below first tier');
+  else {
+    try {
+      const record = couponStore.mint({ amount, percent: tier.percent, prefix: settings.couponPrefix, validDays: settings.couponValidDays });
+      const buf = await renderRecord({ percent: record.percent, code: coupon.displayCode(record.code), raw: coupon.normalizeCode(record.code), expires: coupon.thaiDate(record.expiresAt) });
+      out.push({ record, buf, label: record.percent + '%' });
+    } catch (e) { log(`# amount coupon skipped: ${e && e.message}`); }
+  }
+  const items = basket ? basket.take() : [];
+  if (promo && items.length) {
+    const earned = promo.evaluate(settings.promoRules, items).earned.slice(0, MAX_PRODUCT_COUPONS);
+    for (const rule of earned) {
+      try {
+        const record = couponStore.mint({
+          amount: null, percent: rule.kind === 'percent' ? rule.value : null, prefix: settings.couponPrefix, validDays: settings.couponValidDays,
+          extra: { type: 'product', itemId: rule.itemId, name: rule.name, kind: rule.kind, value: rule.value, minQty: rule.minQty }
+        });
+        const buf = await renderRecord({
+          title: 'คูปองส่วนลดสินค้า', big: promo.rewardText(rule), product: rule.name, note: 'ใช้ได้ครั้งเดียว เมื่อซื้อสินค้านี้ในครั้งหน้า',
+          code: coupon.displayCode(record.code), raw: coupon.normalizeCode(record.code), expires: coupon.thaiDate(record.expiresAt)
+        });
+        out.push({ record, buf, label: rule.name + ' ' + promo.rewardText(rule) });
+      } catch (e) { log(`# product coupon skipped (${rule.name}): ${e && e.message}`); }
+    }
+  }
+  return out;
+}
+
+function basketInfo() {
+  if (!basket || !promo) return { items: [], remainingMs: 0 };
+  const items = basket.items();
+  const prog = new Map(promo.evaluate(settings.promoRules, items).progress.map((p) => [p.rule.itemId, p]));
+  return {
+    remainingMs: basket.remainingMs(),
+    items: items.map((it) => {
+      const p = prog.get(it.itemId);
+      return { itemId: it.itemId, name: it.name, qty: it.qty, minQty: p ? p.rule.minQty : null, reward: p ? promo.rewardText(p.rule) : null, done: !!(p && p.done) };
+    })
+  };
+}
+
+// ยิง/พิมพ์สินค้า → เข้าตะกร้าถ้ามีกฎส่วนลดของสินค้านั้น
+function basketScan(text) {
+  if (!basket || !promo || !settings.couponEnabled) return { ok: false, reason: 'ระบบคูปองปิดอยู่' };
+  const items = ctx.getCatalogItems ? ctx.getCatalogItems() : [];
+  const r = promo.findItem(items, text);
+  if (r.status === 'notfound') return { ok: true, status: 'notfound' };
+  if (r.status === 'suggest') return { ok: true, status: 'suggest', choices: r.choices.map((i) => ({ id: i.id, name: i.name })) };
+  return basketAddItem(r.item.id, r.item.name);
+}
+function basketAddItem(itemId, nameHint) {
+  const rule = settings.promoRules.find((x) => x.itemId === String(itemId));
+  if (!rule) return { ok: true, status: 'nopromo', name: nameHint || String(itemId) };
+  basket.add(rule.itemId, rule.name);
+  return { ok: true, status: 'added', name: rule.name };
 }
 
 function amountInfo() {
@@ -181,7 +238,9 @@ function amountInfo() {
     couponEnabled: !!settings.couponEnabled && !!coupon && !!couponStore,
     amount, remainingMs: pending ? pending.remainingMs() : 0,
     percent: tier ? tier.percent : null,
-    tiers: coupon ? coupon.normalizeTiers(settings.couponTiers) : []
+    tiers: coupon ? coupon.normalizeTiers(settings.couponTiers) : [],
+    basket: basketInfo(),
+    hasRules: settings.promoRules.length > 0
   };
 }
 
@@ -189,7 +248,7 @@ function amountInfo() {
 function openAmount() {
   if (amountWin && !amountWin.isDestroyed()) { amountWin.show(); amountWin.focus(); return; }
   amountWin = new BrowserWindow({
-    width: 320, height: 250, title: 'ยอดบิล (คูปอง)', autoHideMenuBar: true, minimizable: false, maximizable: false, resizable: false,
+    width: 380, height: 540, title: 'บิลถัดไป (คูปอง)', autoHideMenuBar: true, minimizable: false, maximizable: false, resizable: false,
     alwaysOnTop: true,
     webPreferences: { preload: path.join(__dirname, 'amount-preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true }
   });
@@ -198,7 +257,7 @@ function openAmount() {
   try {
     const { screen } = require('electron');
     const wa = screen.getPrimaryDisplay().workArea;
-    amountWin.setPosition(wa.x + wa.width - 340, wa.y + wa.height - 270);
+    amountWin.setPosition(wa.x + wa.width - 400, wa.y + wa.height - 560);
   } catch (e) { /* ใช้ตำแหน่งตั้งต้น */ }
   amountWin.loadFile(path.join(__dirname, 'amount.html'));
   amountWin.on('closed', () => { amountWin = null; });
@@ -212,7 +271,11 @@ function registerCouponIpc() {
       return { ok: true, info: amountInfo() };
     } catch (e) { return { ok: false, reason: e && e.message ? e.message : String(e) }; }
   });
-  ipcMain.handle('fortune:amount-clear', () => { try { if (pending) pending.clear(); } catch (e) { /* ignore */ } return { ok: true }; });
+  ipcMain.handle('fortune:amount-clear', () => { try { if (pending) pending.clear(); if (basket) basket.clear(); } catch (e) { /* ignore */ } return { ok: true }; });
+  ipcMain.handle('fortune:basket-scan', (_e, text) => { try { return basketScan(text); } catch (e) { return { ok: false, reason: e && e.message ? e.message : String(e) }; } });
+  ipcMain.handle('fortune:basket-add', (_e, itemId) => { try { return basket && promo ? basketAddItem(itemId) : { ok: false }; } catch (e) { return { ok: false }; } });
+  ipcMain.handle('fortune:basket-dec', (_e, itemId) => { try { if (basket) basket.dec(itemId); } catch (e) { /* ignore */ } return { ok: true }; });
+  ipcMain.handle('fortune:promo-search', (_e, q) => { try { return promo && ctx.getCatalogItems ? promo.searchItems(ctx.getCatalogItems(), q).map((i) => ({ id: i.id, name: i.name, code: i.code })) : []; } catch (e) { return []; } });
   ipcMain.handle('fortune:coupon-check', (_e, code) => {
     try { return couponStore ? { ok: true, ...couponStore.check(code) } : { ok: false, reason: 'ระบบคูปองไม่พร้อมใช้งาน' }; } catch (e) { return { ok: false, reason: e && e.message ? e.message : String(e) }; }
   });
@@ -424,7 +487,7 @@ function trayItems() {
 function openSettings() {
   if (settingsWin && !settingsWin.isDestroyed()) { settingsWin.show(); settingsWin.focus(); return; }
   settingsWin = new BrowserWindow({
-    width: 480, height: 860, title: 'ตั้งค่าเซียมซี', autoHideMenuBar: true, resizable: true,
+    width: 520, height: 940, title: 'ตั้งค่าเซียมซี', autoHideMenuBar: true, resizable: true,
     webPreferences: { preload: path.join(__dirname, 'preload-fortune.js'), contextIsolation: true, nodeIntegration: false, sandbox: true }
   });
   settingsWin.setMenu(null);
@@ -441,6 +504,7 @@ function init(context) {
   try {
     if (coupon) {
       pending = coupon.createPending();
+      basket = promo ? promo.createBasket() : null;
       couponStore = coupon.createCouponStore({ file: path.join(dir, 'fortune-coupons.json') });
       registerCouponIpc();
     }
@@ -470,4 +534,4 @@ function init(context) {
 
 function shutdown() { if (themeTimer) clearInterval(themeTimer); stopWatcher(true); slipRenderer.closeAll(); }
 
-module.exports = { init, shutdown, trayItems, openSettings, openAmount, _handleBatch: handleBatch, _getPending: () => pending, _getStore: () => couponStore }; // _ = สำหรับ test เท่านั้น
+module.exports = { init, shutdown, trayItems, openSettings, openAmount, _handleBatch: handleBatch, _getPending: () => pending, _getBasket: () => basket, _basketScan: (t) => basketScan(t), _basketScan: (t) => basketScan(t), _getStore: () => couponStore }; // _ = สำหรับ test เท่านั้น

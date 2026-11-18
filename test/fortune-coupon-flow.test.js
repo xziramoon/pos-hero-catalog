@@ -46,9 +46,18 @@ function setup(extra = {}, flags = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'flow-'));
   fs.writeFileSync(path.join(dir, 'fortune-settings.json'), JSON.stringify(Object.assign(
     { mode: 'on', docFilter: 'document', printerName: 'TestPrinter', couponEnabled: true }, extra)));
-  fm.init({ app: { getPath: () => dir, isPackaged: false, getVersion: () => 't' }, getMainWindow: () => null, buildRaster: () => Buffer.alloc(0) });
+  fm.init({ app: { getPath: () => dir, isPackaged: false, getVersion: () => 't' }, getMainWindow: () => null, buildRaster: () => Buffer.alloc(0), getCatalogItems: () => CATALOG });
   return dir;
 }
+const CATALOG = [
+  { id: 'p1', name: 'ปลาหมึกแห้ง', code: '1001', barcodes: ['8850000000011'] },
+  { id: 'p2', name: 'กุ้งแห้ง', code: '1002', barcodes: ['8850000000022'] },
+  { id: 'p3', name: 'ของไม่มีโปร', code: '1003', barcodes: ['8850000000033'] }
+];
+const RULES = [
+  { itemId: 'p1', name: 'ปลาหมึกแห้ง', minQty: 3, kind: 'baht', value: 10 },
+  { itemId: 'p2', name: 'กุ้งแห้ง', minQty: 1, kind: 'percent', value: 5 }
+];
 let jobId = 1000;
 const batch = (docs) => fm._handleBatch(docs.map((doc) => ({ id: ++jobId, doc })));
 
@@ -111,6 +120,49 @@ const run = async (name, fn) => { await fn(); n++; console.log('PASS ' + name); 
     setup(); fm._getPending().set('1200'); await batch(['Z-Report']);
     assert.ok(sent[0].equals(CUT));
     assert.strictEqual(fm._getPending().peek(), 1200);
+  });
+  await run('product coupon: scan 3 items → slip + product coupon + ONE cut; saved with product fields', async () => {
+    setup({ promoRules: RULES });
+    assert.strictEqual(fm._basketScan('8850000000011').status, 'added');
+    fm._basketScan('1001'); fm._basketScan('ปลาหมึก');
+    await batch(['document']);
+    assert.strictEqual(sent.length, 1);
+    assert.strictEqual(countCuts(sent[0]), 1); assert.ok(endsWithCut(sent[0]));
+    assert.strictEqual(sent[0].toString('latin1').split('CPN').length - 1, 1);
+    assert.strictEqual(lastCoupon.big, 'ลด 10 บาท'); assert.strictEqual(lastCoupon.product, 'ปลาหมึกแห้ง');
+    assert.ok(/^SH[A-Z2-9]{6}$/.test(lastCoupon.raw));
+    const rec = fm._getStore().recent(5);
+    assert.strictEqual(rec.length, 1); assert.strictEqual(rec[0].type, 'product'); assert.strictEqual(rec[0].itemId, 'p1');
+    assert.strictEqual(fm._getBasket().items().length, 0, 'ตะกร้าถูกใช้แล้ว');
+  });
+  await run('product coupon: not enough qty / no rule / unknown item → no coupon', async () => {
+    setup({ promoRules: RULES });
+    fm._basketScan('8850000000011'); fm._basketScan('8850000000011'); // 2 < 3
+    assert.strictEqual(fm._basketScan('8850000000033').status, 'nopromo');
+    assert.strictEqual(fm._basketScan('9999').status, 'notfound');
+    await batch(['document']);
+    assert.ok(sent[0].indexOf('CPN') === -1); assert.strictEqual(countCuts(sent[0]), 1);
+    assert.strictEqual(fm._getStore().recent(5).length, 0);
+  });
+  await run('product + amount coupons together: two coupons, one cut at the end', async () => {
+    setup({ promoRules: RULES }); fm._getPending().set('1200'); fm._basketScan('8850000000022');
+    await batch(['document']);
+    assert.strictEqual(sent[0].toString('latin1').split('CPN').length - 1, 2);
+    assert.strictEqual(countCuts(sent[0]), 1); assert.ok(endsWithCut(sent[0]));
+    const types = fm._getStore().recent(5).map((c) => c.type || 'amount').sort();
+    assert.deepStrictEqual(types, ['amount', 'product']);
+  });
+  await run('product coupon render fails → plain slip + cut, nothing saved', async () => {
+    setup({ promoRules: RULES }, { failCoupon: true }); fm._basketScan('8850000000022');
+    await batch(['document']);
+    assert.strictEqual(countCuts(sent[0]), 1); assert.ok(endsWithCut(sent[0])); assert.ok(sent[0].indexOf('CPN') === -1);
+    assert.strictEqual(fm._getStore().recent(5).length, 0);
+  });
+  await run('couponEnabled=false → scan refused, no coupon', async () => {
+    setup({ promoRules: RULES, couponEnabled: false });
+    assert.strictEqual(fm._basketScan('8850000000022').ok, false);
+    await batch(['document']);
+    assert.ok(sent[0].indexOf('CPN') === -1);
   });
   await run('settings normalisation: bad tiers/days/prefix cannot break the module', async () => {
     const logic = require('../fortune/logic');

@@ -377,4 +377,9 @@ function shutdown() {
   try { if (lock) lock.release(); } catch (e) { console.warn('[catalog] unlock failed', e.message); }
 }
 
-module.exports = { registerSchemes, init, openCatalog, toggleCatalog, shutdown };
+// สำหรับคูปองรายสินค้า (fortune): รายการสินค้าแบบย่อ ไม่รวมรูป/ที่ลบแล้ว
+function listForLookup() {
+  try { return store ? store.list().map((i) => ({ id: String(i.id), name: String(i.name || ""), code: i.code == null ? "" : String(i.code), barcodes: Array.isArray(i.barcodes) ? i.barcodes.map(String) : [] })) : []; } catch (e) { return []; }
+}
+
+module.exports = { registerSchemes, init, openCatalog, toggleCatalog, shutdown, listForLookup };

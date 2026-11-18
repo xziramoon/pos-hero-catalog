@@ -92,13 +92,14 @@ function createCouponStore({ file, now = Date.now, randInt = (n) => crypto.rando
   const statusOf = (c) => (!c ? 'notfound' : c.usedAt ? 'used' : now() > c.expiresAt ? 'expired' : 'valid');
 
   return {
-    mint({ amount, percent, prefix, validDays }) {
+    mint({ amount, percent, prefix, validDays, extra }) {
       const days = Math.min(365, Math.max(1, Math.floor(Number(validDays)) || 30));
       const issuedAt = now();
       const taken = new Set(list.map((c) => c.code));
       return {
         code: genCode(prefix, randInt, taken), percent, amount,
-        issuedAt, expiresAt: endOfLocalDay(issuedAt + days * DAY_MS), usedAt: null
+        issuedAt, expiresAt: endOfLocalDay(issuedAt + days * DAY_MS), usedAt: null,
+        ...(extra && typeof extra === "object" ? extra : {})
       };
     },
     commit(rec) { list.push(rec); if (list.length > 5000) list = list.slice(-5000); return save(); },

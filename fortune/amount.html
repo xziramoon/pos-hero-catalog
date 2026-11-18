@@ -4,38 +4,93 @@
 <style>
   body{margin:0;padding:12px 14px;font-family:'Sarabun','Leelawadee UI','Tahoma',sans-serif;background:#fff7ed;color:#1f2937}
   h1{font-size:15px;margin:0 0 8px}
-  input{width:100%;box-sizing:border-box;font-size:28px;font-weight:700;padding:6px 10px;border:2px solid #fb923c;border-radius:8px;text-align:right}
-  .row{display:flex;gap:8px;margin-top:8px}
-  button{flex:1;font-size:15px;padding:7px;border:0;border-radius:8px;cursor:pointer;color:#fff;background:#ea580c;font-family:inherit}
+  .lbl{font-size:13px;color:#6b7280;margin:10px 0 3px}
+  input{width:100%;box-sizing:border-box;font-size:18px;font-weight:700;padding:6px 10px;border:2px solid #fb923c;border-radius:8px;font-family:inherit}
+  #amt{text-align:right}
+  button{font-size:14px;padding:6px 10px;border:0;border-radius:8px;cursor:pointer;color:#fff;background:#ea580c;font-family:inherit}
   button.g{background:#64748b}
-  #st{margin-top:10px;font-size:15px;min-height:42px;line-height:1.35}
+  button.q{background:#fff;color:#ea580c;border:2px solid #fdba74;padding:2px 9px;font-size:16px;font-weight:700}
+  #msg{min-height:20px;margin-top:5px;font-size:14px}
+  #sug{display:flex;flex-direction:column;gap:4px;margin-top:4px}
+  #sug button{text-align:left;background:#fff;color:#1f2937;border:2px solid #fdba74}
+  #list{margin-top:6px;max-height:210px;overflow:auto}
+  .it{display:flex;align-items:center;gap:6px;background:#fff;border:2px solid #fed7aa;border-radius:8px;padding:5px 8px;margin-bottom:5px}
+  .it.done{border-color:#4ade80;background:#f0fdf4}
+  .it .nm{flex:1;font-size:15px;line-height:1.25}
+  .it .sub{font-size:12.5px;color:#6b7280}
+  .it.done .sub{color:#15803d;font-weight:700}
+  .qty{min-width:24px;text-align:center;font-weight:700}
   .ok{color:#15803d;font-weight:700}.warn{color:#b45309}.err{color:#b91c1c}
+  #st{margin-top:8px;font-size:14px;line-height:1.35;min-height:38px}
+  .row{display:flex;gap:8px;margin-top:8px}.row button{flex:1}
 </style></head><body>
-<h1>🧾 ยอดบิลสำหรับคูปอง</h1>
-<input id="amt" inputmode="decimal" autocomplete="off" placeholder="กรอกยอด แล้วกด Enter">
-<div class="row"><button id="ok">ตั้งยอด</button><button id="clr" class="g">ล้าง</button></div>
+<h1>🧾 บิลถัดไป — ยิงสินค้าเพื่อให้ได้คูปอง</h1>
+<input id="scan" autocomplete="off" placeholder="ยิงบาร์โค้ด / พิมพ์ชื่อสินค้า">
+<div id="msg"></div>
+<div id="sug"></div>
+<div id="list"></div>
+<div class="lbl" id="amtLbl">ยอดบิล (ถ้าใช้คูปองตามยอด)</div>
+<input id="amt" inputmode="decimal" autocomplete="off" placeholder="กรอกยอด">
+<div class="row"><button id="clr" class="g">ล้างทั้งหมด</button></div>
 <div id="st">กำลังโหลด…</div>
 <script>
 const $=(id)=>document.getElementById(id);
 const fmt=(n)=>Number(n).toLocaleString('th-TH',{maximumFractionDigits:2});
-let msg=''; // ข้อความ error ชั่วคราว
+const esc=(s)=>String(s).replace(/[&<>"]/g,(c)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let msgTimer=null;
+function flash(text,cls){const m=$('msg');m.className=cls||'';m.textContent=text;clearTimeout(msgTimer);msgTimer=setTimeout(()=>{m.textContent=''},4000)}
 function render(i){
   const st=$('st');
+  $('scan').disabled=!i.couponEnabled;
   if(!i.couponEnabled){st.className='warn';st.textContent='ระบบคูปองปิดอยู่ — เปิดได้ที่ ตั้งค่าเซียมซี';return}
-  if(msg){st.className='err';st.textContent=msg;return}
-  if(i.amount==null){st.className='';st.textContent='ยังไม่มียอดรอ — บิลถัดไปจะได้เซียมซีธรรมดา'+(i.tiers.length?' · ขั้นต่ำ '+fmt(i.tiers[0].min)+' บาท':'');return}
-  const m=Math.ceil(i.remainingMs/60000);
-  st.className=i.percent?'ok':'warn';
-  st.textContent='ยอดรอ '+fmt(i.amount)+' บาท · '+(i.percent?'จะได้คูปองลด '+i.percent+'%':'ยังไม่ถึงขั้นแรก (ไม่ออกคูปอง)')+' · เหลือ '+m+' นาที (ใช้กับบิลถัดไปบิลเดียว)';
+  const b=i.basket||{items:[],remainingMs:0};
+  $('list').innerHTML=b.items.map(it=>
+    '<div class="it'+(it.done?' done':'')+'"><div class="nm">'+esc(it.name)+'<div class="sub">'+
+    (it.done?'✓ ครบเงื่อนไข ได้คูปอง '+esc(it.reward):('ซื้ออีก '+((it.minQty||1)-it.qty)+' ชิ้น จะได้คูปอง '+esc(it.reward||'')))+
+    '</div></div><button class="q" data-d="'+esc(it.itemId)+'">−</button><span class="qty">'+it.qty+'</span><button class="q" data-a="'+esc(it.itemId)+'">+</button></div>').join('');
+  const lines=[];
+  const got=b.items.filter(x=>x.done).length;
+  if(b.items.length)lines.push(got?'✓ จะได้คูปองสินค้า '+got+' ใบ':'ยังไม่ครบเงื่อนไข');
+  if(i.amount!=null)lines.push('ยอด '+fmt(i.amount)+' บาท · '+(i.percent?'จะได้คูปองลด '+i.percent+'%':'ยังไม่ถึงขั้นแรก'));
+  if(!lines.length){st.className='';st.textContent='ยังไม่มีรายการรอ — บิลถัดไปจะได้เซียมซีธรรมดา'+(i.hasRules?'':' (ยังไม่ได้ตั้งกฎสินค้า)');return}
+  const ms=Math.max(b.remainingMs||0,i.remainingMs||0);
+  st.className='ok';st.textContent=lines.join(' · ')+' · เหลือ '+Math.ceil(ms/60000)+' นาที (ใช้กับบิลถัดไปบิลเดียว)';
 }
 async function refresh(){try{render(await amountApi.get())}catch(e){$('st').textContent='อ่านสถานะไม่ได้'}}
-async function submit(){
-  const r=await amountApi.set($('amt').value);
-  if(!r.ok){msg=r.reason||'ตั้งยอดไม่สำเร็จ';setTimeout(()=>{msg='';refresh()},3000)}else{msg='';$('amt').value=''}
-  refresh();
+function showSuggest(list){
+  $('sug').innerHTML=list.map(c=>'<button data-id="'+esc(c.id)+'">'+esc(c.name)+'</button>').join('');
 }
-$('amt').addEventListener('keydown',e=>{if(e.key==='Enter')submit()});
-$('ok').onclick=submit;
-$('clr').onclick=async()=>{await amountApi.clear();msg='';$('amt').value='';refresh();$('amt').focus()};
-refresh();setInterval(refresh,1000);$('amt').focus();
+async function doScan(){
+  const v=$('scan').value.trim(); if(!v)return;
+  $('scan').value=''; $('sug').innerHTML='';
+  const r=await amountApi.scan(v);
+  if(!r.ok){flash(r.reason||'ยิงไม่สำเร็จ','err')}
+  else if(r.status==='added')flash('✓ เพิ่ม '+r.name,'ok');
+  else if(r.status==='nopromo')flash('"'+r.name+'" ไม่มีโปรโมชั่นคูปอง','warn');
+  else if(r.status==='notfound')flash('ไม่พบสินค้านี้ในแคตตาล็อก (เพิ่มบาร์โค้ดในแคตตาล็อกก่อน)','err');
+  else if(r.status==='suggest'){flash('เลือกสินค้า:','warn');showSuggest(r.choices)}
+  refresh();$('scan').focus();
+}
+$('scan').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();doScan()}});
+$('sug').addEventListener('click',async e=>{
+  const id=e.target.getAttribute&&e.target.getAttribute('data-id'); if(!id)return;
+  $('sug').innerHTML='';
+  const r=await amountApi.addItem(id);
+  if(r.status==='added')flash('✓ เพิ่ม '+r.name,'ok'); else if(r.status==='nopromo')flash('สินค้านี้ไม่มีโปรโมชั่นคูปอง','warn');
+  refresh();$('scan').focus();
+});
+$('list').addEventListener('click',async e=>{
+  const a=e.target.getAttribute&&e.target.getAttribute('data-a'),d=e.target.getAttribute&&e.target.getAttribute('data-d');
+  if(a)await amountApi.addItem(a); else if(d)await amountApi.decItem(d); else return;
+  refresh();$('scan').focus();
+});
+async function submitAmt(){
+  const r=await amountApi.set($('amt').value);
+  if(!r.ok)flash(r.reason||'ตั้งยอดไม่สำเร็จ','err'); else $('amt').value='';
+  refresh();$('scan').focus();
+}
+$('amt').addEventListener('keydown',e=>{if(e.key==='Enter')submitAmt()});
+$('clr').onclick=async()=>{await amountApi.clear();$('amt').value='';$('sug').innerHTML='';flash('','');refresh();$('scan').focus()};
+window.addEventListener('focus',()=>$('scan').focus());
+refresh();setInterval(refresh,1000);$('scan').focus();
 </script></body></html>

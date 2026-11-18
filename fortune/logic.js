@@ -1,6 +1,8 @@
 'use strict';
 // ตรรกะล้วน (ไม่พึ่ง Electron) ของโมดูลเซียมซี — ทดสอบด้วย node ได้โดยตรง
 const crypto = require('crypto');
+let promo = null; // กฎคูปองรายสินค้า — โหลดไม่ได้ = ไม่มีกฎ
+try { promo = require('./promo-core'); } catch (e) { console.warn('[fortune] promo-core load failed:', e && e.message); }
 let coupon = null; // คูปองพังต้องไม่ทำให้เซียมซี/การตัดกระดาษพัง
 try { coupon = require('./coupon-core'); } catch (e) { console.warn('[fortune] coupon-core load failed:', e && e.message); }
 
@@ -24,7 +26,8 @@ const DEFAULT_SETTINGS = Object.freeze({
   couponEnabled: false,    // คูปองส่วนลดตามยอดต่อท้ายเซียมซี (แคชเชียร์กรอกยอดที่หน้าต่าง "ยอดบิล") — ปิดเป็นค่าเริ่มต้น
   couponTiers: [{ min: 500, percent: 5 }, { min: 1000, percent: 10 }], // [{min: ยอดขั้นต่ำ, percent: ส่วนลด%}] ตัวอย่างตั้งต้น แก้ในหน้าตั้งค่า
   couponValidDays: 30,     // อายุคูปอง (วัน) หมดอายุสิ้นวัน
-  couponPrefix: 'SH'       // ตัวอักษรนำหน้ารหัส (A-Z/0-9 ไม่เกิน 4 ตัว)
+  couponPrefix: 'SH',      // ตัวอักษรนำหน้ารหัส (A-Z/0-9 ไม่เกิน 4 ตัว)
+  promoRules: []           // คูปองรายสินค้า [{itemId,name,minQty,kind:'baht'|'percent',value}] ตั้งในหน้าตั้งค่า
 });
 
 function normalizeSettings(raw) {
@@ -38,6 +41,7 @@ function normalizeSettings(raw) {
   s.couponTiers = coupon ? coupon.normalizeTiers(s.couponTiers) : [];
   s.couponValidDays = Math.min(365, Math.max(1, Math.floor(Number(s.couponValidDays)) || 30));
   s.couponPrefix = coupon ? coupon.sanitizePrefix(s.couponPrefix) : '';
+  s.promoRules = promo ? promo.normalizeRules(s.promoRules) : [];
   return s;
 }
 
