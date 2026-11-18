@@ -9,6 +9,10 @@ const logic = require('./logic');
 const slipRenderer = require('./slip-renderer');
 let coupon = null; // คูปองพังต้องไม่ทำให้เซียมซี/การตัดกระดาษพัง — โหลดไม่ได้ = ไม่มีคูปอง
 try { coupon = require('./coupon-core'); } catch (e) { console.warn('[fortune] coupon-core load failed:', e && e.message); }
+let billReader = null; // ตัวอ่านบิลจากไฟล์ spool — โหลดไม่ได้ = ใช้ยอด/สินค้าที่แคชเชียร์กรอกเอง
+try { billReader = require('./bill-reader'); } catch (e) { console.warn('[fortune] bill-reader load failed:', e && e.message); }
+let createBillSource = null;
+try { createBillSource = require('./bill-source').createBillSource; } catch (e) { console.warn('[fortune] bill-source load failed:', e && e.message); }
 let promo = null; // กฎคูปองรายสินค้า — โหลดไม่ได้ = ไม่มีคูปองรายสินค้า
 try { promo = require('./promo-core'); } catch (e) { console.warn('[fortune] promo-core load failed:', e && e.message); }
 
@@ -45,6 +49,8 @@ const dedup = logic.makeDedup(200);
 let stats = { date: logic.localDateStr(new Date()), count: 0 };
 let settingsWin = null;
 let amountWin = null;
+let billSrc = null;       // เฝ้าโฟลเดอร์ที่ตัวช่วยสิทธิ์ผู้ดูแลคัดลอกไฟล์ spool มาให้
+let billTimer = null;
 let basket = null;        // สินค้าที่แคชเชียร์ยิงไว้ของบิลถัดไป (ใช้ครั้งเดียว)
 let pending = null;       // ยอดบิลที่แคชเชียร์กรอกไว้รอบิลถัดไป (ใช้ครั้งเดียว)
 let couponStore = null;   // ประวัติคูปองที่ออก
@@ -143,7 +149,7 @@ async function handleBatch(evts) {
       for (let i = 0; i < slipCount; i++) { const idx = logic.pickIndex(FORTUNES, settings); picked.push(idx + 1); parts.push(await getSlipBytes(idx)); }
       // คูปองต่อท้ายเซียมซีก่อนคำสั่งตัด (หนึ่งชุด = หนึ่งคูปอง) พลาดตรงไหน = พิมพ์เซียมซีเดิม ใบเสร็จต้องถูกตัดเสมอ
       let minted = [];
-      try { minted = await buildCoupons(); for (const m of minted) parts.push(m.buf); } catch (e) { minted = []; log(`# coupon skipped: ${e && e.message}`); }
+      try { minted = await buildCoupons(Math.max(1, slipCount)); for (const m of minted) parts.push(m.buf); } catch (e) { minted = []; log(`# coupon skipped: ${e && e.message}`); }
       parts.push(logic.FEED_AND_CUT);
       await sendBytes(Buffer.concat(parts));
       for (let i = 0; i < slipCount; i++) bumpStats();
@@ -165,31 +171,31 @@ async function handleBatch(evts) {
 }
 
 // ---------- คูปองส่วนลด (ตามยอด + รายสินค้า) ----------
-// ออกคูปองของบิลนี้: คูปองตามยอด (0-1 ใบ) + คูปองรายสินค้า (กฎละ 1 ใบ สูงสุด 3) — ใบไหนพลาดก็ข้ามเฉพาะใบนั้น; เรียกผ่าน try เสมอ
+// ออกคูปองของบิลนี้ — ใบไหนพลาดก็ข้ามเฉพาะใบนั้น; เรียกผ่าน try เสมอ
+// แหล่งข้อมูลของบิล: (1) บิลที่ตัวอ่านบิลอ่านได้จากไฟล์ spool (ยอดรวม + รายการ) — มาก่อน (2) ยอด/สินค้าที่แคชเชียร์กรอกเอง (ใช้เมื่อไม่มีบิลที่อ่านได้)
+const MAX_COUPONS = 4;
 const MAX_PRODUCT_COUPONS = 3;
 function renderRecord(c) { return withTimeout(slipRenderer.renderCoupon(c, ctx.buildRaster), 10000, 'render coupon'); }
-async function buildCoupons() {
-  if (!coupon || !couponStore || !settings.couponEnabled) return [];
-  const out = [];
-  const amount = pending ? pending.take() : null;
-  const tier = amount != null ? coupon.pickTier(settings.couponTiers, amount) : null;
-  if (amount == null) log('# coupon: no pending amount');
-  else if (!tier) log('# coupon: amount below first tier');
-  else {
+const catalogItems = () => { try { return ctx.getCatalogItems ? ctx.getCatalogItems() : []; } catch (e) { return []; } };
+
+async function issueFor(src, out) {
+  const base = src.billNo ? { billNo: src.billNo } : undefined;
+  const tier = src.amount != null ? coupon.pickTier(settings.couponTiers, src.amount) : null;
+  if (tier && out.length < MAX_COUPONS) {
     try {
-      const record = couponStore.mint({ amount, percent: tier.percent, prefix: settings.couponPrefix, validDays: settings.couponValidDays });
+      const record = couponStore.mint({ amount: src.amount, percent: tier.percent, prefix: settings.couponPrefix, validDays: settings.couponValidDays, extra: base });
       const buf = await renderRecord({ percent: record.percent, code: coupon.displayCode(record.code), raw: coupon.normalizeCode(record.code), expires: coupon.thaiDate(record.expiresAt) });
       out.push({ record, buf, label: record.percent + '%' });
     } catch (e) { log(`# amount coupon skipped: ${e && e.message}`); }
-  }
-  const items = basket ? basket.take() : [];
-  if (promo && items.length) {
-    const earned = promo.evaluate(settings.promoRules, items).earned.slice(0, MAX_PRODUCT_COUPONS);
+  } else log(src.amount == null ? '# coupon: no amount' : '# coupon: amount below first tier');
+  if (promo && src.items && src.items.length) {
+    const earned = promo.evaluate(settings.promoRules, src.items).earned.slice(0, MAX_PRODUCT_COUPONS);
     for (const rule of earned) {
+      if (out.length >= MAX_COUPONS) break;
       try {
         const record = couponStore.mint({
           amount: null, percent: rule.kind === 'percent' ? rule.value : null, prefix: settings.couponPrefix, validDays: settings.couponValidDays,
-          extra: { type: 'product', itemId: rule.itemId, name: rule.name, kind: rule.kind, value: rule.value, minQty: rule.minQty }
+          extra: { ...(base || {}), type: 'product', itemId: rule.itemId, name: rule.name, kind: rule.kind, value: rule.value, minQty: rule.minQty }
         });
         const buf = await renderRecord({
           title: 'คูปองส่วนลดสินค้า', big: promo.rewardText(rule), product: rule.name, note: 'ใช้ได้ครั้งเดียว เมื่อซื้อสินค้านี้ในครั้งหน้า',
@@ -199,6 +205,28 @@ async function buildCoupons() {
       } catch (e) { log(`# product coupon skipped (${rule.name}): ${e && e.message}`); }
     }
   }
+}
+
+async function buildCoupons(billCount = 1) {
+  if (!coupon || !couponStore || !settings.couponEnabled) return [];
+  const manualAmount = pending ? pending.take() : null;
+  const manualItems = basket ? basket.take() : [];
+  const sources = [];
+  if (billSrc && settings.billReadEnabled) {
+    billSrc.poll();
+    if (billSrc.unsettled()) { for (let i = 0; i < 20 && billSrc.unsettled(); i++) { await new Promise((r) => setTimeout(r, 150)); billSrc.poll(); } }
+    const used = couponStore.recent(5000);
+    for (const b of billSrc.take(Math.max(1, billCount))) {
+      if (b.billNo && used.some((c) => c.billNo === b.billNo)) { log(`# coupon: bill ${b.billNo} already issued → skip`); continue; }
+      const bk = billReader ? billReader.billToBasket(b, catalogItems()) : { matched: [], unmatched: [] };
+      log(`# bill read: ${b.billNo || '-'} total ${b.total} · ${b.items.length} items (${bk.matched.length} matched${bk.unmatched.length ? ', unmatched: ' + bk.unmatched.join(' | ') : ''})`);
+      sources.push({ amount: b.total, items: bk.matched, billNo: b.billNo });
+    }
+  }
+  if (!sources.length && (manualAmount != null || manualItems.length)) sources.push({ amount: manualAmount, items: manualItems, billNo: null });
+  else if (sources.length && (manualAmount != null || manualItems.length)) log('# coupon: manual entry ignored (bill was read automatically)');
+  const out = [];
+  for (const src of sources) await issueFor(src, out);
   return out;
 }
 
@@ -275,6 +303,9 @@ function registerCouponIpc() {
   ipcMain.handle('fortune:basket-scan', (_e, text) => { try { return basketScan(text); } catch (e) { return { ok: false, reason: e && e.message ? e.message : String(e) }; } });
   ipcMain.handle('fortune:basket-add', (_e, itemId) => { try { return basket && promo ? basketAddItem(itemId) : { ok: false }; } catch (e) { return { ok: false }; } });
   ipcMain.handle('fortune:basket-dec', (_e, itemId) => { try { if (basket) basket.dec(itemId); } catch (e) { /* ignore */ } return { ok: true }; });
+  ipcMain.handle('fortune:bill-status', () => { try { return billStatus(); } catch (e) { return { running: false, outdated: false, enabled: false, last: null }; } });
+  ipcMain.handle('fortune:helper-setup', () => { try { helperSetup(); } catch (e) { /* ignore */ } return { ok: true }; });
+  ipcMain.handle('fortune:helper-remove', () => { try { helperRemove(); } catch (e) { /* ignore */ } return { ok: true }; });
   ipcMain.handle('fortune:promo-search', (_e, q) => { try { return promo && ctx.getCatalogItems ? promo.searchItems(ctx.getCatalogItems(), q).map((i) => ({ id: i.id, name: i.name, code: i.code })) : []; } catch (e) { return []; } });
   ipcMain.handle('fortune:coupon-check', (_e, code) => {
     try { return couponStore ? { ok: true, ...couponStore.check(code) } : { ok: false, reason: 'ระบบคูปองไม่พร้อมใช้งาน' }; } catch (e) { return { ok: false, reason: e && e.message ? e.message : String(e) }; }
@@ -475,6 +506,86 @@ function getState() {
   };
 }
 
+// ---------- ตัวอ่านบิลอัตโนมัติ: ตัวช่วยสิทธิ์ผู้ดูแล (Scheduled Task) + โฟลเดอร์ที่แอปอ่านได้ ----------
+// ตัวช่วย (spool-relay.ps1) คัดลอกไฟล์ spool ของบิลมาที่ C:\ProgramData\PosHero\spool-live แอปอ่านแล้วถอดเป็นรายการ/ยอดรวม
+// ติดตั้งครั้งเดียวด้วย UAC: สำเนาสคริปต์ไปไว้ใน ProgramData (แก้ได้เฉพาะผู้ดูแล — งานที่รันด้วยสิทธิ์สูงต้องไม่รันสคริปต์ที่ผู้ใช้ทั่วไปแก้ได้)
+const HELPER_TASK = 'POS Hero Spool Helper';
+const progData = () => path.join(process.env.ProgramData || 'C:\\ProgramData', 'PosHero');
+const helperScriptCopy = () => path.join(progData(), 'spool-relay.ps1');
+const billDir = () => (ctx && ctx.billDir) || path.join(progData(), 'spool-live');
+const sha = (file) => { try { return require('crypto').createHash('sha256').update(fs.readFileSync(file)).digest('hex'); } catch (e) { return ''; } };
+
+function runElevated(innerScript, cb) {
+  const enc = (s) => Buffer.from(s, 'utf16le').toString('base64');
+  const outer = `$p = Start-Process powershell.exe -Verb RunAs -Wait -PassThru -WindowStyle Hidden -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-EncodedCommand','${enc(innerScript)}'; exit $p.ExitCode`;
+  execFile('powershell.exe', ['-NoProfile', '-EncodedCommand', enc(outer)], { windowsHide: true, timeout: 180000 }, (error) => cb(error));
+}
+
+function helperSetup() {
+  const src = unpackedPath('fortune', 'spool-relay.ps1');
+  const user = `${process.env.USERDOMAIN || process.env.COMPUTERNAME}\\${process.env.USERNAME}`;
+  const dir = progData(), dest = billDir(), script = helperScriptCopy();
+  const inner = `
+$ErrorActionPreference = 'Stop'
+try {
+  New-Item -ItemType Directory -Force -Path '${psq(dir)}' | Out-Null
+  New-Item -ItemType Directory -Force -Path '${psq(dest)}' | Out-Null
+  Copy-Item -LiteralPath '${psq(src)}' -Destination '${psq(script)}' -Force
+  icacls '${psq(dir)}' /inheritance:r /grant:r '*S-1-5-32-544:(OI)(CI)F' '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-545:(OI)(CI)RX' | Out-Null
+  Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*spool-relay.ps1*' -and $_.ProcessId -ne $PID } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+  $act = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument ('-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "${psq(script)}" -Dest "${psq(dest)}"')
+  $trg = New-ScheduledTaskTrigger -AtLogOn -User '${psq(user)}'
+  $pri = New-ScheduledTaskPrincipal -UserId '${psq(user)}' -LogonType Interactive -RunLevel Highest
+  $set = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 99 -RestartInterval (New-TimeSpan -Minutes 1) -MultipleInstances IgnoreNew
+  Register-ScheduledTask -TaskName '${HELPER_TASK}' -Action $act -Trigger $trg -Principal $pri -Settings $set -Force | Out-Null
+  Start-ScheduledTask -TaskName '${HELPER_TASK}'
+  exit 0
+} catch { exit 2 }`;
+  notify('กำลังติดตั้งตัวช่วยอ่านบิล', 'กดอนุญาต (สิทธิ์ผู้ดูแล) ในหน้าต่างที่เด้งขึ้นมา');
+  runElevated(inner, (error) => {
+    if (error) { log(`# helper setup failed: ${error.message}`); notify('ติดตั้งตัวช่วยอ่านบิลไม่สำเร็จ', 'ต้องกดอนุญาต (สิทธิ์ผู้ดูแล) — ลองใหม่อีกครั้ง'); onChange(); return; }
+    setTimeout(() => {
+      const ok = !!billSrc && billSrc.heartbeatAgeMs() < 5000;
+      log(`# helper setup done, running=${ok}`);
+      notify(ok ? 'ตัวช่วยอ่านบิลพร้อมใช้งาน' : 'ติดตั้งแล้ว แต่ตัวช่วยยังไม่ตอบสนอง', ok ? 'บิลถัดไปจะถูกอ่านอัตโนมัติ' : 'ลองรีสตาร์ทเครื่อง หรือกดติดตั้งใหม่');
+      onChange();
+    }, 4000);
+  });
+}
+
+function helperRemove() {
+  const inner = `
+$ErrorActionPreference = 'SilentlyContinue'
+Stop-ScheduledTask -TaskName '${HELPER_TASK}'
+Unregister-ScheduledTask -TaskName '${HELPER_TASK}' -Confirm:$false
+Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*spool-relay.ps1*' -and $_.ProcessId -ne $PID } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+exit 0`;
+  runElevated(inner, (error) => {
+    log(`# helper remove ${error ? 'failed: ' + error.message : 'ok'}`);
+    notify(error ? 'ถอนตัวช่วยอ่านบิลไม่สำเร็จ' : 'ถอนตัวช่วยอ่านบิลแล้ว', error ? 'ต้องกดอนุญาต (สิทธิ์ผู้ดูแล)' : 'กลับไปใช้การกรอกยอด/ยิงสินค้าเอง');
+    onChange();
+  });
+}
+
+function billStatus() {
+  const age = billSrc ? billSrc.heartbeatAgeMs() : Infinity;
+  const last = billSrc ? billSrc.last() : null;
+  let detail = null;
+  if (last && billReader && promo) {
+    const bk = billReader.billToBasket(last, catalogItems());
+    const rules = new Set(settings.promoRules.map((r) => r.itemId));
+    detail = {
+      billNo: last.billNo, date: last.date, total: last.total, payment: last.payment, at: last.at,
+      items: last.items.map((it) => ({ name: it.name, qty: it.qty, total: it.total })),
+      matched: bk.matched.map((m) => ({ name: m.name, qty: m.qty, hasRule: rules.has(m.itemId) })),
+      unmatched: bk.unmatched
+    };
+  }
+  const copy = helperScriptCopy();
+  const outdated = age < 5000 && fs.existsSync(copy) && sha(copy) !== sha(unpackedPath('fortune', 'spool-relay.ps1'));
+  return { running: age < 5000, outdated, enabled: !!settings.billReadEnabled, last: detail };
+}
+
 // ---------- เก็บตัวอย่างไฟล์ spool ของบิล POS (ไว้ดูว่าอ่านรายการจากบิลอัตโนมัติได้ไหม) ----------
 // ต้องใช้สิทธิ์ผู้ดูแลเพื่ออ่านโฟลเดอร์ spool → ขอ UAC ครั้งเดียว สคริปต์หยุดเองเมื่อครบ 8 งาน/30 นาที (หรือกดหยุดจากเมนูถาด)
 let captureTimer = null;
@@ -558,6 +669,10 @@ function init(context) {
     if (coupon) {
       pending = coupon.createPending();
       basket = promo ? promo.createBasket() : null;
+      if (billReader && createBillSource) {
+        billSrc = createBillSource({ dir: billDir(), readBill: (buf) => billReader.readBill(buf), settleMs: ctx.billSettleMs || 1200 });
+        billTimer = setInterval(() => { try { billSrc.poll(); } catch (e) { /* ignore */ } }, 300);
+      }
       couponStore = coupon.createCouponStore({ file: path.join(dir, 'fortune-coupons.json') });
       registerCouponIpc();
     }
@@ -585,6 +700,6 @@ function init(context) {
   if (settings.mode !== 'off') startWatcher().catch(() => {});
 }
 
-function shutdown() { if (themeTimer) clearInterval(themeTimer); if (captureTimer) clearInterval(captureTimer); stopWatcher(true); slipRenderer.closeAll(); }
+function shutdown() { if (themeTimer) clearInterval(themeTimer); if (captureTimer) clearInterval(captureTimer); if (billTimer) clearInterval(billTimer); stopWatcher(true); slipRenderer.closeAll(); }
 
-module.exports = { init, shutdown, trayItems, openSettings, openAmount, _handleBatch: handleBatch, _getPending: () => pending, _getBasket: () => basket, _basketScan: (t) => basketScan(t), _basketScan: (t) => basketScan(t), _getStore: () => couponStore }; // _ = สำหรับ test เท่านั้น
+module.exports = { init, shutdown, trayItems, openSettings, openAmount, _handleBatch: handleBatch, _getPending: () => pending, _getBillSrc: () => billSrc, _getBasket: () => basket, _basketScan: (t) => basketScan(t), _basketScan: (t) => basketScan(t), _getStore: () => couponStore }; // _ = สำหรับ test เท่านั้น

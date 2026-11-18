@@ -27,6 +27,7 @@ const DEFAULT_SETTINGS = Object.freeze({
   couponTiers: [{ min: 500, percent: 5 }, { min: 1000, percent: 10 }], // [{min: ยอดขั้นต่ำ, percent: ส่วนลด%}] ตัวอย่างตั้งต้น แก้ในหน้าตั้งค่า
   couponValidDays: 30,     // อายุคูปอง (วัน) หมดอายุสิ้นวัน
   couponPrefix: 'SH',      // ตัวอักษรนำหน้ารหัส (A-Z/0-9 ไม่เกิน 4 ตัว)
+  billReadEnabled: true,   // อ่านยอด/รายการจากบิลที่ POS พิมพ์ (ต้องติดตั้งตัวช่วยสิทธิ์ผู้ดูแลก่อน) ถ้าอ่านไม่ได้ใช้ค่าที่แคชเชียร์กรอก
   promoRules: []           // คูปองรายสินค้า [{itemId,name,minQty,kind:'baht'|'percent',value}] ตั้งในหน้าตั้งค่า
 });
 
@@ -41,6 +42,7 @@ function normalizeSettings(raw) {
   s.couponTiers = coupon ? coupon.normalizeTiers(s.couponTiers) : [];
   s.couponValidDays = Math.min(365, Math.max(1, Math.floor(Number(s.couponValidDays)) || 30));
   s.couponPrefix = coupon ? coupon.sanitizePrefix(s.couponPrefix) : '';
+  s.billReadEnabled = s.billReadEnabled !== false;
   s.promoRules = promo ? promo.normalizeRules(s.promoRules) : [];
   return s;
 }

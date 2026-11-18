@@ -69,6 +69,12 @@
     <div class="hint">คั่นแต่ละขั้นด้วย ; เช่น 500:5; 1000:10 = ยอดตั้งแต่ 500 ลด 5% · ตั้งแต่ 1000 ลด 10%</div></div>
   <div class="row dates"><div style="flex:1"><span class="lbl">อายุคูปอง (วัน)</span><input type="text" id="couponValidDays" inputmode="numeric"></div>
     <div style="flex:1"><span class="lbl">ตัวนำหน้ารหัส (A-Z/0-9 ไม่เกิน 4 ตัว)</span><input type="text" id="couponPrefix" maxlength="4"></div></div>
+  <div class="row"><span class="lbl">อ่านบิลอัตโนมัติ (ไม่ต้องกรอกยอด/ยิงสินค้า)</span>
+    <label class="chk"><input type="checkbox" id="billReadEnabled"> อ่านยอดและรายการจากบิลที่ POS พิมพ์</label>
+    <div id="billSt" style="margin:6px 0;min-height:20px"></div>
+    <div class="dates"><button type="button" id="helperSetup">ติดตั้ง/อัปเดตตัวช่วย (ขอสิทธิ์ผู้ดูแลครั้งเดียว)</button><button type="button" id="helperRemove">ถอนตัวช่วย</button></div>
+    <div id="billLast" class="hint" style="margin-top:6px"></div>
+    <div class="hint">ตัวช่วยคัดลอกไฟล์บิลจากคิวพิมพ์ของ Windows ให้แอปอ่าน (ไม่ส่งข้อมูลออกนอกเครื่อง) · ถ้าอ่านไม่ได้ ระบบใช้ยอดที่กรอก/สินค้าที่ยิงเองตามเดิม · ชื่อสินค้าบนบิลต้องตรงกับชื่อในแคตตาล็อก</div></div>
   <div class="row"><span class="lbl">คูปองรายสินค้า (ยิงสินค้าที่หน้าต่าง "🧾 ยอดบิล" ก่อนพิมพ์บิล)</span>
     <div id="rules"></div>
     <div class="dates"><input type="text" id="rSearch" placeholder="ค้นหาสินค้า (ชื่อ/รหัส/บาร์โค้ด) แล้ว Enter"></div>
@@ -91,7 +97,7 @@
 
 <script>
   const $ = (id) => document.getElementById(id);
-  const bools = ['skipUnlucky', 'showZh', 'showTh', 'cutOthers', 'couponEnabled'];
+  const bools = ['skipUnlucky', 'showZh', 'showTh', 'cutOthers', 'couponEnabled', 'billReadEnabled'];
   const texts = ['mode', 'docFilter', 'startDate', 'endDate', 'footer', 'theme', 'krathongStart', 'krathongEnd', 'footerKrathong', 'couponPrefix', 'couponValidDays'];
   const tiersToText = (t) => (t || []).map((x) => x.min + ':' + x.percent).join('; ');
   const textToTiers = (s) => String(s || '').split(/[;\n]/).map((p) => p.trim().split(':')).filter((a) => a.length === 2)
@@ -162,6 +168,21 @@
     await origChk();
     if (!$('useBtn').disabled) $('useBtn').focus(); else { $('chkCode').focus(); $('chkCode').select(); }
   };
+  async function refreshBill() {
+    try {
+      const b = await window.fortuneApi.billStatus(); const st = $('billSt');
+      st.className = b.running ? 'ok' : 'bad';
+      st.textContent = b.running ? (b.outdated ? '● ตัวช่วยทำงานอยู่ แต่เป็นเวอร์ชันเก่า — กด "ติดตั้ง/อัปเดตตัวช่วย"' : '● ตัวช่วยทำงานอยู่') : '○ ตัวช่วยยังไม่ทำงาน — กดติดตั้ง (ครั้งเดียว) หรือรีสตาร์ทเครื่อง';
+      const l = b.last; const el = $('billLast');
+      if (!l) { el.textContent = 'ยังไม่มีบิลที่อ่านได้ — พิมพ์บิลสักใบแล้วดูผลที่นี่'; return; }
+      const matched = l.matched.length, un = l.unmatched.length;
+      el.innerHTML = 'บิลล่าสุด ' + escH(l.billNo || '-') + ' · ยอด ' + escH(l.total) + ' บาท · ' + l.items.length + ' รายการ (จับคู่กับแคตตาล็อกได้ ' + matched + ')' +
+        (un ? '<br>ยังไม่มีในแคตตาล็อก: ' + l.unmatched.map(escH).join(' | ') : '');
+    } catch (e) { /* ignore */ }
+  }
+  $('helperSetup').onclick = () => { window.fortuneApi.helperSetup(); setStatus('กำลังติดตั้ง — กดอนุญาตในหน้าต่างที่เด้งขึ้นมา', true); };
+  $('helperRemove').onclick = () => { window.fortuneApi.helperRemove(); setStatus('กำลังถอนตัวช่วย — กดอนุญาตในหน้าต่างที่เด้งขึ้นมา', true); };
+  refreshBill(); setInterval(refreshBill, 2500);
   $('rules').addEventListener('click', (e) => { const i = e.target.getAttribute && e.target.getAttribute('data-del'); if (i != null) { rules.splice(Number(i), 1); drawRules(); } });
   async function rSearch() {
     const list = await window.fortuneApi.promoSearch($('rSearch').value); const p = $('rPick');
