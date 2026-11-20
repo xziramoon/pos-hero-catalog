@@ -21,7 +21,7 @@ function saveConfig() { try { fs.writeFileSync(cfgPath, JSON.stringify(cfg, null
 function log(s, autoTyped) {
   try { fs.appendFileSync(logPath, JSON.stringify({ startedAt: new Date(s.startedAt).toISOString(), machine: s.machine, staff: s.staff, amount: s.amount, status: s.status, endedAt: s.endedAt ? new Date(s.endedAt).toISOString() : null, matchedText: s.matchedText || null, autoTyped: !!autoTyped }) + '\n'); } catch (e) { /* ignore */ }
 }
-function send(msg) { lastMsg = msg; if (server) server.broadcast(msg); }
+function send(msg) { msg = { shopName: cfg.shopName || undefined, ...msg }; lastMsg = msg; if (server) server.broadcast(msg); }
 function push(state) { if (win && !win.isDestroyed()) win.webContents.send('qrlock:state', state); }
 function hideWin() { if (win && !win.isDestroyed()) win.hide(); }
 
