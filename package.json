@@ -39,6 +39,7 @@
       "preload-catalog.js",
       "catalog/**/*",
       "fortune/**/*",
+      "qrlock/**/*",
       "renderer/**/*",
       "build/icon.ico",
       "build/tray.png",
@@ -46,7 +47,9 @@
       "!renderer/catalog/dev/**",
       "!renderer/catalog/image/tools/**",
       "!catalog/tools/**",
-      "!fortune/tools/**"
+      "!fortune/tools/**",
+      "!qrlock/phase0*",
+      "!qrlock/build-phase0.js"
     ],
     "asarUnpack": [
       "build/raw-print.ps1",

@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>จอลูกค้า</title>
+<style>
+html,body{margin:0;height:100%;background:#fff;color:#111;font-family:system-ui,"Noto Sans Thai",sans-serif;text-align:center}
+#v{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:10px}
+#qr svg{width:min(70vw,60vh);height:auto} #amt{font-size:9vmin;font-weight:700} #sub{font-size:4vmin;color:#555}
+#st{position:fixed;top:0;left:0;right:0;padding:4px;font-size:14px;background:#c00;color:#fff;display:none}
+.paid{background:#0a7;color:#fff}.bad{background:#999;color:#fff}
+</style></head><body>
+<div id="st">ไม่ได้เชื่อมต่อ</div><div id="v"></div>
+<script src="/qrcode.js"></script>
+<script>
+const v=document.getElementById('v'),st=document.getElementById('st');let timer=null,ws,wl;
+function setBg(c){document.body.className=c||''}
+function render(m){clearInterval(timer);setBg('');
+ if(m.type==='show_qr'){const q=qrcode(0,'M');q.addData(m.payload);q.make();
+  v.innerHTML='<div id="sub">'+(m.shopName||'')+'</div><div id="qr">'+q.createSvgTag({cellSize:6,margin:4,scalable:true})+'</div><div id="amt">฿ '+m.amount+'</div><div id="sub">เหลือเวลา <span id="t"></span> วินาที</div>';
+  const end=Date.now()+(m.expiresInSec||180)*1000;const tick=()=>{const e=document.getElementById('t');if(e)e.textContent=Math.max(0,Math.ceil((end-Date.now())/1000))};tick();timer=setInterval(tick,500);}
+ else if(m.type==='paid'){setBg('paid');v.innerHTML='<div id="amt">✓ รับเงินแล้ว</div><div id="sub">฿ '+m.amount+' ขอบคุณครับ</div>';beep();setTimeout(()=>render({type:'idle'}),5000)}
+ else if(m.type==='expired'||m.type==='cancelled'){setBg('bad');v.innerHTML='<div id="amt">'+(m.type==='expired'?'หมดเวลา':'ยกเลิกรายการ')+'</div>';setTimeout(()=>render({type:'idle'}),4000)}
+ else v.innerHTML='<div id="amt">พร้อมรับชำระ</div>';}
+function beep(){try{const a=new (window.AudioContext||window.webkitAudioContext)(),o=a.createOscillator();o.connect(a.destination);o.frequency.value=880;o.start();o.stop(a.currentTime+.25)}catch(e){}}
+function connect(){ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws');
+ ws.onopen=()=>{st.style.display='none'};ws.onmessage=e=>{try{render(JSON.parse(e.data))}catch(x){}};
+ ws.onclose=()=>{st.style.display='block';setTimeout(connect,3000)};ws.onerror=()=>ws.close()}
+async function wake(){try{wl=await navigator.wakeLock.request('screen')}catch(e){}}
+document.addEventListener('click',wake);document.addEventListener('visibilitychange',()=>{if(!document.hidden)wake()});
+render({type:'idle'});connect();wake();
+</script></body></html>
