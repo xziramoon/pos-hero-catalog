@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="th"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>QR ล็อกยอด — ระยะ 0</title>
+<style>
+body{font-family:system-ui,"Noto Sans Thai",sans-serif;margin:0;padding:16px;max-width:560px;margin-inline:auto;background:#fafafa;color:#111}
+h1{font-size:20px} label{display:block;margin:14px 0 4px;font-weight:600}
+textarea,input,select{width:100%;box-sizing:border-box;font-size:16px;padding:8px;border:1px solid #bbb;border-radius:6px}
+textarea{height:90px;font-family:monospace;font-size:13px}
+button{font-size:17px;padding:10px 18px;border-radius:8px;border:0;background:#0a7;color:#fff;margin-top:12px}
+.err{color:#c00;margin-top:6px}.ok{color:#080;margin-top:6px}
+#qrbox{background:#fff;text-align:center;padding:16px;margin-top:16px;border-radius:8px;display:none}
+#amt{font-size:34px;font-weight:700;margin-top:8px} small{color:#666;word-break:break-all;display:block;margin-top:8px}
+</style></head><body>
+<h1>QR ล็อกยอด (ระยะ 0 ทดสอบ)</h1>
+<label>ธนาคาร / ต้นแบบ</label>
+<select id="slot"><option value="maemanee">แม่มณี</option><option value="bbl">กรุงเทพ</option></select>
+<label>ข้อความ QR ต้นแบบ (เก็บในเบราว์เซอร์เครื่องนี้เท่านั้น ไม่ส่งไปไหน)</label>
+<textarea id="tpl" placeholder="วางข้อความจาก QR ต้นแบบที่นี่"></textarea>
+<div id="tplmsg"></div>
+<label>ยอดเงิน (บาท)</label>
+<input id="amount" inputmode="decimal" value="1.00">
+<button id="go">สร้าง QR</button>
+<div id="msg"></div>
+<div id="qrbox"><div id="qr"></div><div id="amt"></div><small id="raw"></small></div>
+<script>/*QRLIB*/</script>
+<script>/*BUILDER*/</script>
+<script>
+const $=id=>document.getElementById(id), K=s=>'qrlock.tpl.'+s;
+function load(){try{$('tpl').value=localStorage.getItem(K($('slot').value))||''}catch(e){} check()}
+function check(){const t=$('tpl').value.trim(),m=$('tplmsg');if(!t){m.textContent='';return}
+ const v=QrLockBuilder.validateTemplate(t);m.className=v.ok?'ok':'err';m.textContent=v.ok?'ต้นแบบถูกต้อง ✓':'ต้นแบบใช้ไม่ได้: '+v.error;
+ if(v.ok)try{localStorage.setItem(K($('slot').value),t)}catch(e){}}
+$('slot').onchange=load;$('tpl').oninput=check;
+$('go').onclick=()=>{const msg=$('msg');msg.textContent='';$('qrbox').style.display='none';
+ try{const s=QrLockBuilder.buildQr($('tpl').value,$('amount').value);
+  const q=qrcode(0,'M');q.addData(s);q.make();
+  $('qr').innerHTML=q.createSvgTag({cellSize:6,margin:4,scalable:true});
+  const svg=$('qr').querySelector('svg');svg.style.width='100%';svg.style.maxWidth='360px';
+  $('amt').textContent='฿ '+QrLockBuilder.formatAmount($('amount').value);$('raw').textContent=s;$('qrbox').style.display='block';
+ }catch(e){msg.className='err';msg.textContent=e.message}};
+load();
+</script></body></html>
