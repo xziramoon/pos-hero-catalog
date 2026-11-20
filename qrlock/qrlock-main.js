@@ -3,6 +3,8 @@
 // โมดูลแยก ปิดได้ด้วย qrlock-config.json → enabled:false (ใน userData ไม่ลง git) พังตรงนี้ต้องไม่กระทบ POS
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
+const { execFile } = require('child_process');
 const { BrowserWindow, globalShortcut, ipcMain } = require('electron');
 const { buildQr, validateTemplate, formatAmount } = require('./qr-builder');
 const { createSessions } = require('./session');
@@ -69,7 +71,31 @@ async function stop() {
   hideWin();
 }
 
+const FW_RULE = 'POS Hero QR Display';
+function lanIps() {
+  const out = [];
+  for (const list of Object.values(os.networkInterfaces())) for (const i of list || []) if (i.family === 'IPv4' && !i.internal) out.push(i.address);
+  return out;
+}
+let linkWin = null;
+function openLink() {
+  if (linkWin && !linkWin.isDestroyed()) { linkWin.show(); linkWin.focus(); return; }
+  linkWin = new BrowserWindow({ width: 360, height: 560, alwaysOnTop: true, autoHideMenuBar: true, title: 'เชื่อมจอลูกค้า',
+    webPreferences: { preload: path.join(__dirname, 'preload-link.js'), contextIsolation: true, nodeIntegration: false } });
+  linkWin.on('closed', () => { linkWin = null; });
+  linkWin.loadFile(path.join(__dirname, 'link.html'));
+}
 function registerIpc() {
+  ipcMain.handle('qrlock:link-info', () => ({ ips: lanIps(), port: cfg.displayPort }));
+  // กฎไฟร์วอลล์ TCP ของจอลูกค้าโดยเฉพาะ (แยกจากกฎ UDP ของช่องทางรับเงินเข้า ไม่แตะของเดิม)
+  ipcMain.handle('qrlock:link-firewall', () => new Promise((resolve) => {
+    const inner = "Remove-NetFirewallRule -DisplayName '" + FW_RULE + "' -ErrorAction SilentlyContinue; New-NetFirewallRule -DisplayName '" + FW_RULE + "' -Direction Inbound -Protocol TCP -LocalPort " + (parseInt(cfg.displayPort, 10) || 8080) + " -Action Allow -Profile Any | Out-Null";
+    const enc = Buffer.from(inner, 'utf16le').toString('base64');
+    execFile('powershell.exe', ['-NoProfile', '-Command', "Start-Process powershell -Verb RunAs -Wait -WindowStyle Hidden -ArgumentList '-NoProfile','-EncodedCommand','" + enc + "'"], { timeout: 120000, windowsHide: true }, (err, _o, se) => {
+      if (err) resolve({ ok: false, reason: /cancel/i.test(String(se)) ? 'ยกเลิกการขอสิทธิ์ admin' : String(se || err.message).trim() });
+      else resolve({ ok: true });
+    });
+  }));
   ipcMain.handle('qrlock:submit', (_e, { code, amount, force } = {}) => {
     if (!active) return { error: 'ปิดอยู่' };
     if (!/^\d{2}$/.test(String(code))) return { error: 'รหัสต้องเป็นตัวเลข 2 หลัก' };
@@ -103,7 +129,11 @@ function init(context) {
 }
 function shutdown() { try { stop(); } catch (e) { /* ignore */ } }
 function trayItems() {
-  return [{ label: 'QR ล็อกยอด (เปิด/ปิด)', type: 'checkbox', checked: active, click: async () => {
+  return [{ label: '📱 เชื่อมจอลูกค้า (สแกนด้วยมือถือ)', click: () => {
+    if (!active) { require('electron').dialog.showErrorBox('QR ล็อกยอด', 'ต้องเปิด "QR ล็อกยอด" ก่อน'); return; }
+    openLink();
+  } },
+  { label: 'QR ล็อกยอด (เปิด/ปิด)', type: 'checkbox', checked: active, click: async () => {
     if (active) { cfg.enabled = false; saveConfig(); await stop(); return; }
     const v = validateTemplate(cfg.qrTemplate);
     if (!v.ok) { require('electron').dialog.showErrorBox('QR ล็อกยอด', 'ยังตั้งต้นแบบ QR ไม่ได้ (' + v.error + ')\nแก้ไฟล์ ' + cfgPath); return; }

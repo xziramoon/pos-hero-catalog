@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="th"><head><meta charset="utf-8"><title>เชื่อมจอลูกค้า</title>
+<style>
+body{margin:0;padding:14px;font-family:system-ui,"Noto Sans Thai",sans-serif;background:#fff;color:#111;text-align:center}
+#q svg{width:100%;max-width:300px;height:auto} .u{font-size:18px;font-weight:700;word-break:break-all;margin:6px 0}
+select{font-size:15px;padding:4px;max-width:100%} .s{color:#555;font-size:14px;margin:6px 0}
+button{font-size:15px;padding:8px 12px;border:0;border-radius:6px;background:#0a7;color:#fff;margin:4px} #m{min-height:20px;font-size:14px}
+</style></head><body>
+<div><b>สแกนด้วยมือถือเพื่อเปิดจอลูกค้า</b></div>
+<div class="s">มือถือต้องต่อ WiFi ร้านเดียวกับคอม แล้วเปิดค้างไว้หน้านี้</div>
+<div id="q"></div><div class="u" id="u"></div>
+<select id="ip"></select>
+<div class="s">ถ้ามือถือเปิดไม่ขึ้น กดปุ่มด้านล่าง (ครั้งเดียว) แล้วลองสแกนใหม่</div>
+<button id="fw">🛡️ อนุญาตไฟร์วอลล์</button><div id="m"></div>
+<script src="vendor/qrcode.js"></script>
+<script>
+const $=id=>document.getElementById(id);let info;
+function draw(){const url='http://'+$('ip').value+':'+info.port+'/display';$('u').textContent=url;
+ const q=qrcode(0,'M');q.addData(url);q.make();$('q').innerHTML=q.createSvgTag({cellSize:6,margin:4,scalable:true})}
+qrlockLink.getInfo().then(i=>{info=i;if(!i.ips.length){$('u').textContent='ไม่พบ WiFi/LAN — เช็กการเชื่อมต่อเน็ตของคอม';$('ip').style.display='none';return}
+ $('ip').innerHTML=i.ips.map(x=>'<option>'+x+'</option>').join('');$('ip').onchange=draw;draw()});
+$('fw').onclick=async()=>{$('m').textContent='กำลังขอสิทธิ์ admin...';const r=await qrlockLink.firewall();$('m').textContent=r.ok?'เรียบร้อย ✅':'ไม่สำเร็จ: '+(r.reason||'')};
+</script></body></html>
