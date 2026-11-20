@@ -13,8 +13,9 @@ function frame(text) {
   return Buffer.concat([h, p]);
 }
 
-function createDisplayServer({ port = 8080, getLastMessage = () => ({ type: 'idle' }), assetsDir = __dirname } = {}) {
+function createDisplayServer({ port = 8080, heartbeatMs = 10000, getLastMessage = () => ({ type: 'idle' }), assetsDir = __dirname } = {}) {
   const clients = new Set();
+  let hb = null;
   const files = { '/display': ['display.html', 'text/html; charset=utf-8'], '/qrcode.js': ['vendor/qrcode.js', 'application/javascript'], '/assets/risu-sheet.jpg': ['assets/risu-sheet.jpg', 'image/jpeg'] };
   const server = http.createServer((req, res) => {
     const url = (req.url || '').split('?')[0];
@@ -41,8 +42,17 @@ function createDisplayServer({ port = 8080, getLastMessage = () => ({ type: 'idl
     try { socket.write(frame(JSON.stringify(getLastMessage()))); } catch (e) { drop(); }
   });
   return {
-    start: () => new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, '0.0.0.0', () => resolve(server.address().port)); }),
-    stop: () => new Promise((resolve) => { for (const c of clients) { try { c.destroy(); } catch (e) { /* ignore */ } } clients.clear(); server.close(() => resolve()); }),
+    start: () => new Promise((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(port, '0.0.0.0', () => {
+        // heartbeat: จอฝั่งมือถือใช้เช็กว่าสายยังอยู่ (มือถือหลับ/สัญญาณหลุดแบบเงียบ onclose จะไม่ทำงาน)
+        hb = setInterval(() => { const f = frame('{"type":"ping"}'); for (const c of [...clients]) { try { c.write(f); } catch (e) { clients.delete(c); } } }, heartbeatMs);
+        if (hb.unref) hb.unref();
+        resolve(server.address().port);
+      });
+    }),
+    stop: () => new Promise((resolve) => {
+      clearInterval(hb); hb = null; for (const c of clients) { try { c.destroy(); } catch (e) { /* ignore */ } } clients.clear(); server.close(() => resolve()); }),
     broadcast(msg) { const f = frame(JSON.stringify(msg)); for (const c of [...clients]) { try { c.write(f); } catch (e) { clients.delete(c); } } },
     clientCount: () => clients.size
   };
