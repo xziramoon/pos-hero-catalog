@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="th"><head><meta charset="utf-8"><title>รายการ QR วันนี้</title>
+<style>body{margin:0;padding:12px;font-family:system-ui,"Noto Sans Thai",sans-serif;font-size:14px}
+table{border-collapse:collapse;width:100%}th,td{border-bottom:1px solid #ddd;padding:5px 6px;text-align:left}
+.PAID_MANUAL{background:#fff3c4}.EXPIRED{background:#ffd9d9}.PAID{background:#e3f7e8}.s{color:#666;margin:6px 0}</style></head><body>
+<b>รายการ QR วันนี้</b> <button onclick="load()">รีเฟรช</button>
+<div class="s">แถวเหลือง = ยืนยันเอง · แถวแดง = หมดเวลา — เถ้าแก่ตรวจตอนปิดยอด</div>
+<table><thead><tr><th>เวลา</th><th>เครื่อง</th><th>ยอด</th><th>สถานะ</th><th>ข้อความแจ้งเตือน</th></tr></thead><tbody id="b"></tbody></table>
+<script>
+const N={PAID:'เงินเข้าอัตโนมัติ',PAID_MANUAL:'ยืนยันเอง',EXPIRED:'หมดเวลา',CANCELLED:'ยกเลิก'};
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+async function load(){const r=await qrlockLog.today();document.getElementById('b').innerHTML=r.map(x=>'<tr class="'+esc(x.status)+'"><td>'+new Date(x.startedAt).toLocaleTimeString('th-TH')+'</td><td>'+esc(x.machine)+'</td><td>'+esc(x.amount)+'</td><td>'+esc(N[x.status]||x.status)+'</td><td>'+esc(x.matchedText||'')+'</td></tr>').join('')||'<tr><td colspan=5>ยังไม่มีรายการ</td></tr>'}
+load();
+</script></body></html>

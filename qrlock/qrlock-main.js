@@ -9,6 +9,7 @@ const { BrowserWindow, globalShortcut, ipcMain } = require('electron');
 const { buildQr, validateTemplate, formatAmount } = require('./qr-builder');
 const { createSessions } = require('./session');
 const { createDisplayServer } = require('./display-server');
+const { createMatcher } = require('./matcher');
 
 const DEFAULTS = { enabled: false, machineName: 'เครื่อง 1', bank: '', qrTemplate: '', shopName: '', expirySec: 180, warnAmountOver: 10000, hotkey: 'F9', transferCodes: ['02'], displayPort: 8080 };
 let ctx = null, cfg = { ...DEFAULTS }, win = null, server = null, sessions = null, timer = null, lastMsg = { type: 'idle' }, active = false;
@@ -114,7 +115,33 @@ async function applyConfig(input) {
   try { if (ctx && ctx.onChange) ctx.onChange(); } catch (e) { /* ignore */ }
   return { ok: true };
 }
+let logWin = null;
+function openLog() {
+  if (logWin && !logWin.isDestroyed()) { logWin.show(); logWin.focus(); return; }
+  logWin = new BrowserWindow({ width: 640, height: 480, autoHideMenuBar: true, title: 'รายการ QR วันนี้',
+    webPreferences: { preload: path.join(__dirname, 'preload-log.js'), contextIsolation: true, nodeIntegration: false } });
+  logWin.on('closed', () => { logWin = null; });
+  logWin.loadFile(path.join(__dirname, 'log.html'));
+}
+const matcher = createMatcher({ getBank: () => cfg.bank });
 function registerIpc() {
+  // แจ้งเตือนเงินเข้า (หลังกันซ้ำของ POS Hero แล้ว) → จับคู่กับ QR ที่รออยู่ ถ้าไม่ตรง/ไม่มี QR ไม่ทำอะไรเลย
+  ipcMain.on('qrlock:payment', (_e, evt) => {
+    try {
+      if (!active || !evt || !sessions) return;
+      const w = sessions.waiting();
+      if (!w) return;
+      const r = matcher({ amount: evt.amount, text: String(evt.text || '').slice(0, 300), ts: Number(evt.ts) || Date.now(), id: evt.id }, w);
+      if (r.ok) sessions.markPaid(String(evt.text || '').trim().slice(0, 200));
+    } catch (e) { /* ignore */ }
+  });
+  ipcMain.handle('qrlock:log-today', () => {
+    try {
+      const d = new Date().toDateString();
+      return fs.readFileSync(logPath, 'utf8').split('\n').filter(Boolean).map((l) => { try { return JSON.parse(l); } catch (e) { return null; } })
+        .filter((r) => r && new Date(r.startedAt).toDateString() === d).reverse();
+    } catch (e) { return []; }
+  });
   ipcMain.handle('qrlock:cfg-load', () => cfg);
   ipcMain.handle('qrlock:cfg-validate', (_e, t) => { const v = validateTemplate(t); if (!v.ok) return v; try { return { ok: true, sample: buildQr(t, '1.00') }; } catch (e) { return { ok: false, error: e.message }; } });
   ipcMain.handle('qrlock:cfg-save', (_e, c) => applyConfig(c || {}).catch((e) => ({ ok: false, error: e.message })));
@@ -161,7 +188,8 @@ function init(context) {
 }
 function shutdown() { try { stop(); } catch (e) { /* ignore */ } }
 function trayItems() {
-  return [{ label: '⚙️ ตั้งค่า QR ล็อกยอด', click: () => openSettings() },
+  return [{ label: '📒 รายการ QR วันนี้', click: () => openLog() },
+  { label: '⚙️ ตั้งค่า QR ล็อกยอด', click: () => openSettings() },
   { label: '📱 เชื่อมจอลูกค้า (สแกนด้วยมือถือ)', click: () => {
     if (!active) { require('electron').dialog.showErrorBox('QR ล็อกยอด', 'ต้องเปิด "QR ล็อกยอด" ก่อน'); return; }
     openLink();
