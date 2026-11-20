@@ -85,7 +85,39 @@ function openLink() {
   linkWin.on('closed', () => { linkWin = null; });
   linkWin.loadFile(path.join(__dirname, 'link.html'));
 }
+let setWin = null;
+function openSettings() {
+  if (setWin && !setWin.isDestroyed()) { setWin.show(); setWin.focus(); return; }
+  setWin = new BrowserWindow({ width: 460, height: 720, autoHideMenuBar: true, title: 'ตั้งค่า QR ล็อกยอด',
+    webPreferences: { preload: path.join(__dirname, 'preload-settings.js'), contextIsolation: true, nodeIntegration: false } });
+  setWin.on('closed', () => { setWin = null; });
+  setWin.loadFile(path.join(__dirname, 'settings.html'));
+}
+async function applyConfig(input) {
+  const n = { ...cfg, ...input };
+  n.expirySec = Math.max(30, parseInt(n.expirySec, 10) || 180);
+  n.warnAmountOver = Math.max(0, parseFloat(n.warnAmountOver) || 0);
+  n.displayPort = parseInt(n.displayPort, 10);
+  if (!(n.displayPort > 0 && n.displayPort < 65536)) return { ok: false, error: 'พอร์ตไม่ถูกต้อง' };
+  n.hotkey = String(n.hotkey || '').trim();
+  n.qrTemplate = String(n.qrTemplate || '').trim();
+  n.transferCodes = (n.transferCodes || []).map(String);
+  if (n.transferCodes.some((c) => !/^\d{2}$/.test(c))) return { ok: false, error: 'รหัสประเภทต้องเป็นตัวเลข 2 หลัก' };
+  if (n.enabled) {
+    const v = validateTemplate(n.qrTemplate);
+    if (!v.ok) return { ok: false, error: 'ต้นแบบ QR ใช้ไม่ได้: ' + v.error };
+    if (!n.transferCodes.length) return { ok: false, error: 'ต้องมีรหัสเงินโอนอย่างน้อย 1 รหัส' };
+  }
+  await stop();
+  cfg = n; saveConfig();
+  if (cfg.enabled) await start();
+  try { if (ctx && ctx.onChange) ctx.onChange(); } catch (e) { /* ignore */ }
+  return { ok: true };
+}
 function registerIpc() {
+  ipcMain.handle('qrlock:cfg-load', () => cfg);
+  ipcMain.handle('qrlock:cfg-validate', (_e, t) => { const v = validateTemplate(t); if (!v.ok) return v; try { return { ok: true, sample: buildQr(t, '1.00') }; } catch (e) { return { ok: false, error: e.message }; } });
+  ipcMain.handle('qrlock:cfg-save', (_e, c) => applyConfig(c || {}).catch((e) => ({ ok: false, error: e.message })));
   ipcMain.handle('qrlock:link-info', () => ({ ips: lanIps(), port: cfg.displayPort }));
   // กฎไฟร์วอลล์ TCP ของจอลูกค้าโดยเฉพาะ (แยกจากกฎ UDP ของช่องทางรับเงินเข้า ไม่แตะของเดิม)
   ipcMain.handle('qrlock:link-firewall', () => new Promise((resolve) => {
@@ -129,7 +161,8 @@ function init(context) {
 }
 function shutdown() { try { stop(); } catch (e) { /* ignore */ } }
 function trayItems() {
-  return [{ label: '📱 เชื่อมจอลูกค้า (สแกนด้วยมือถือ)', click: () => {
+  return [{ label: '⚙️ ตั้งค่า QR ล็อกยอด', click: () => openSettings() },
+  { label: '📱 เชื่อมจอลูกค้า (สแกนด้วยมือถือ)', click: () => {
     if (!active) { require('electron').dialog.showErrorBox('QR ล็อกยอด', 'ต้องเปิด "QR ล็อกยอด" ก่อน'); return; }
     openLink();
   } },

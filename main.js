@@ -343,7 +343,7 @@ app.whenReady().then(() => {
     if (fortune) fortune.init({ app, getMainWindow: () => mainWindow, buildRaster: buildEscPosRaster, getCatalogItems: () => { try { return catalog && catalog.listForLookup ? catalog.listForLookup() : []; } catch (e) { return []; } }, onChange: () => { try { refreshTrayMenu(); } catch (e) { /* ignore */ } } });
   } catch (e) { console.warn('[fortune] init failed:', e && e.message); }
 
-  try { if (qrlock) qrlock.init({ app }); } catch (e) { console.warn('[qrlock] init failed:', e && e.message); }
+  try { if (qrlock) qrlock.init({ app, onChange: () => { try { refreshTrayMenu(); } catch (e) { /* ignore */ } } }); } catch (e) { console.warn('[qrlock] init failed:', e && e.message); }
 
   try {
     if (catalog) catalog.init({ app, getMainWindow: () => mainWindow, userDataDir: app.getPath('userData'), config: {} });
