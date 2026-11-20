@@ -21,6 +21,10 @@ try {
 let fortune = null;
 try { fortune = require('./fortune/fortune-main'); } catch (e) { console.warn('[fortune] load failed:', e && e.message); fortune = null; }
 
+// QR ล็อกยอด — โมดูลแยกใน ./qrlock ปิดได้ใน qrlock-config.json; พังตรงนี้ต้องไม่กระทบ POS
+let qrlock = null;
+try { qrlock = require('./qrlock/qrlock-main'); } catch (e) { console.warn('[qrlock] load failed:', e && e.message); qrlock = null; }
+
 autoUpdater.autoDownload = true;
 autoUpdater.autoInstallOnAppQuit = true;
 
@@ -207,6 +211,7 @@ function refreshTrayMenu() {
     { label: '📱 ข้อมูลเชื่อมต่อมือถือ (IP/Token)', click: () => showRelayInfoDialog() },
     { type: 'separator' },
     ...(fortune ? (() => { try { return fortune.trayItems(); } catch (e) { return []; } })() : []),
+    ...(qrlock ? (() => { try { return qrlock.trayItems(); } catch (e) { return []; } })() : []),
     { label: '🔄 ตรวจสอบอัปเดต', click: () => {
       manualUpdateCheck = true;
       // The 'error' event (below) already shows a notification and covers
@@ -337,6 +342,8 @@ app.whenReady().then(() => {
   try {
     if (fortune) fortune.init({ app, getMainWindow: () => mainWindow, buildRaster: buildEscPosRaster, getCatalogItems: () => { try { return catalog && catalog.listForLookup ? catalog.listForLookup() : []; } catch (e) { return []; } }, onChange: () => { try { refreshTrayMenu(); } catch (e) { /* ignore */ } } });
   } catch (e) { console.warn('[fortune] init failed:', e && e.message); }
+
+  try { if (qrlock) qrlock.init({ app, onChange: () => { try { refreshTrayMenu(); } catch (e) { /* ignore */ } } }); } catch (e) { console.warn('[qrlock] init failed:', e && e.message); }
 
   try {
     if (catalog) catalog.init({ app, getMainWindow: () => mainWindow, userDataDir: app.getPath('userData'), config: {} });
@@ -566,6 +573,7 @@ ipcMain.handle('print:raw', async (_event, arg) => {
 
 app.on('before-quit', () => {
   try { if (fortune) fortune.shutdown(); } catch (e) { /* ignore */ }
+  try { if (qrlock) qrlock.shutdown(); } catch (e) { /* ignore */ }
   isQuitting = true;
 });
 

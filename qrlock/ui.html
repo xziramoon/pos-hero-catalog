@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="th"><head><meta charset="utf-8"><title>QR ล็อกยอด</title>
+<style>
+body{margin:0;padding:14px;font-family:system-ui,"Noto Sans Thai",sans-serif;background:#fff;color:#111;text-align:center}
+input{font-size:22px;width:100%;box-sizing:border-box;padding:8px;margin:4px 0 10px;text-align:center}
+button{font-size:16px;padding:8px 14px;margin:4px;border:0;border-radius:6px;background:#0a7;color:#fff}
+button.x{background:#c33} .m{color:#c00;min-height:20px} #q svg{width:100%;max-width:320px;height:auto}
+#amt{font-size:30px;font-weight:700} .hide{display:none} .s{color:#555}
+</style></head><body>
+<div id="inp"><div>รหัสประเภท (2 หลัก)</div><input id="code" maxlength="2" inputmode="numeric" autofocus>
+<div>ยอดเงิน (บาท)</div><input id="amount" inputmode="decimal"><div class="m" id="msg"></div>
+<div class="s">Enter = สร้าง QR · Esc = ปิด</div></div>
+<div id="wait" class="hide"><div id="q"></div><div id="amt"></div><div class="s" id="t"></div><div class="m" id="note"></div>
+<button id="ok">ยืนยันเอง (รับเงินแล้ว)</button><button id="no" class="x">ยกเลิก</button></div>
+<script src="vendor/qrcode.js"></script>
+<script>
+const $=id=>document.getElementById(id);let st=null,tm=null,force=false;
+function show(w){$('inp').className=w?'hide':'';$('wait').className=w?'':'hide'}
+async function go(){const r=await qrlock.submit($('code').value.trim(),$('amount').value.trim(),force);
+ if(r&&r.warn){force=true;$('msg').textContent=r.warn+' — กด Enter อีกครั้งเพื่อยืนยัน'}else if(r&&r.error){force=false;$('msg').textContent=r.error}}
+$('code').addEventListener('keydown',e=>{if(e.key==='Enter')$('amount').focus()});
+$('amount').addEventListener('input',()=>{force=false});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')qrlock.close();else if(e.key==='Enter'&&e.target.id==='amount')go()});
+$('ok').onclick=()=>qrlock.confirmManual();$('no').onclick=()=>qrlock.cancel();
+qrlock.onState(s=>{clearInterval(tm);
+ if(s.mode==='input'){show(false);force=false;$('msg').textContent='';$('code').value='';$('amount').value='';$('code').focus();return}
+ show(true);$('amt').textContent='฿ '+s.amount;
+ if(s.payload&&!s.onDisplay){const q=qrcode(0,'M');q.addData(s.payload);q.make();$('q').innerHTML=q.createSvgTag({cellSize:6,margin:4,scalable:true})}else $('q').innerHTML='';
+ $('note').textContent=s.onDisplay?'QR แสดงอยู่บนจอลูกค้า':'';
+ const tick=()=>{$('t').textContent='เหลือ '+Math.max(0,Math.ceil((s.expiresAt-Date.now())/1000))+' วินาที'};tick();tm=setInterval(tick,500)});
+</script></body></html>
