@@ -15,7 +15,7 @@ function frame(text) {
 
 function createDisplayServer({ port = 8080, getLastMessage = () => ({ type: 'idle' }), assetsDir = __dirname } = {}) {
   const clients = new Set();
-  const files = { '/display': ['display.html', 'text/html; charset=utf-8'], '/qrcode.js': ['vendor/qrcode.js', 'application/javascript'] };
+  const files = { '/display': ['display.html', 'text/html; charset=utf-8'], '/qrcode.js': ['vendor/qrcode.js', 'application/javascript'], '/assets/risu-sheet.jpg': ['assets/risu-sheet.jpg', 'image/jpeg'] };
   const server = http.createServer((req, res) => {
     const url = (req.url || '').split('?')[0];
     const f = files[url] || (url === '/' ? files['/display'] : null);
