@@ -40,3 +40,24 @@ const { createDisplayServer } = require('../qrlock/display-server');
   await srv.stop();
   console.log('qrlock-session/display: all tests passed');
 })().catch((e) => { console.error(e); process.exit(1); });
+
+// heartbeat: server ส่ง ping สม่ำเสมอ เพื่อให้จอมือถือรู้ว่าสายยังอยู่
+(async () => {
+  const srv = createDisplayServer({ port: 0, heartbeatMs: 40, getLastMessage: () => ({ type: 'idle' }) });
+  const port = await srv.start();
+  const types = [];
+  await new Promise((resolve) => {
+    const s = net.connect(port, '127.0.0.1', () => s.write('GET /ws HTTP/1.1\r\nHost: x\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n'));
+    let buf = Buffer.alloc(0), up = false;
+    s.on('data', (d) => {
+      buf = Buffer.concat([buf, d]);
+      if (!up) { const i = buf.indexOf('\r\n\r\n'); if (i < 0) return; buf = buf.slice(i + 4); up = true; }
+      while (buf.length >= 2 && buf.length >= 2 + buf[1]) { types.push(JSON.parse(buf.slice(2, 2 + buf[1]).toString()).type); buf = buf.slice(2 + buf[1]); }
+      if (types.filter((t) => t === 'ping').length >= 3) { s.destroy(); resolve(); }
+    });
+  });
+  await srv.stop();
+  assert.strictEqual(types[0], 'idle');
+  assert.ok(types.filter((t) => t === 'ping').length >= 3);
+  console.log('qrlock heartbeat: ok');
+})().catch((e) => { console.error(e); process.exit(1); });
