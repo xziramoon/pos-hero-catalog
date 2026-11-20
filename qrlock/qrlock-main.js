@@ -138,8 +138,7 @@ function registerIpc() {
   ipcMain.handle('qrlock:log-today', () => {
     try {
       const d = new Date().toDateString();
-      return fs.readFileSync(logPath, 'utf8').split('
-').filter(Boolean).map((l) => { try { return JSON.parse(l); } catch (e) { return null; } })
+      return fs.readFileSync(logPath, 'utf8').split('\n').filter(Boolean).map((l) => { try { return JSON.parse(l); } catch (e) { return null; } })
         .filter((r) => r && new Date(r.startedAt).toDateString() === d).reverse();
     } catch (e) { return []; }
   });
