@@ -5,20 +5,21 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { execFile } = require('child_process');
-const { BrowserWindow, globalShortcut, ipcMain } = require('electron');
+const { BrowserWindow, globalShortcut, ipcMain, Notification } = require('electron');
 const { buildQr, validateTemplate, formatAmount } = require('./qr-builder');
 const { createSessions } = require('./session');
 const { createDisplayServer } = require('./display-server');
 const { createMatcher } = require('./matcher');
+const { runAutoType } = require('./autotype');
 
-const DEFAULTS = { enabled: false, machineName: 'เครื่อง 1', bank: '', qrTemplate: '', shopName: '', expirySec: 180, warnAmountOver: 10000, hotkey: 'F9', transferCodes: ['02'], displayPort: 8080 };
+const DEFAULTS = { enabled: false, machineName: 'เครื่อง 1', bank: '', qrTemplate: '', shopName: '', expirySec: 180, warnAmountOver: 10000, hotkey: 'F9', transferCodes: ['02'], displayPort: 8080, autoType: { enabled: false, windowTitleContains: '', keys: [] } };
 let ctx = null, cfg = { ...DEFAULTS }, win = null, server = null, sessions = null, timer = null, lastMsg = { type: 'idle' }, active = false;
 let cfgPath = null, logPath = null;
 
 function loadConfig() { try { return { ...DEFAULTS, ...JSON.parse(fs.readFileSync(cfgPath, 'utf8')) }; } catch (e) { return { ...DEFAULTS }; } }
 function saveConfig() { try { fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2)); } catch (e) { /* ignore */ } }
-function log(s) {
-  try { fs.appendFileSync(logPath, JSON.stringify({ startedAt: new Date(s.startedAt).toISOString(), machine: s.machine, staff: s.staff, amount: s.amount, status: s.status, endedAt: s.endedAt ? new Date(s.endedAt).toISOString() : null, matchedText: s.matchedText || null, autoTyped: false }) + '\n'); } catch (e) { /* ignore */ }
+function log(s, autoTyped) {
+  try { fs.appendFileSync(logPath, JSON.stringify({ startedAt: new Date(s.startedAt).toISOString(), machine: s.machine, staff: s.staff, amount: s.amount, status: s.status, endedAt: s.endedAt ? new Date(s.endedAt).toISOString() : null, matchedText: s.matchedText || null, autoTyped: !!autoTyped }) + '\n'); } catch (e) { /* ignore */ }
 }
 function send(msg) { lastMsg = msg; if (server) server.broadcast(msg); }
 function push(state) { if (win && !win.isDestroyed()) win.webContents.send('qrlock:state', state); }
@@ -46,10 +47,19 @@ function showWaiting(s) {
 
 function onSessionChange(s) {
   if (s.status === 'WAITING') return;
-  log(s);
+  if (!(s.status === 'PAID' && cfg.autoType && cfg.autoType.enabled)) log(s, false);
   if (s.status === 'PAID' || s.status === 'PAID_MANUAL') send({ type: 'paid', amount: s.amount });
   else if (s.status === 'EXPIRED') send({ type: 'expired' });
   else if (s.status === 'CANCELLED') { if (s.note !== 'replaced') send({ type: 'cancelled' }); }
+  if (s.status === 'PAID' && cfg.autoType && cfg.autoType.enabled) {
+    hideWin();
+    setTimeout(() => {
+      runAutoType({ windowTitleContains: cfg.autoType.windowTitleContains, keys: cfg.autoType.keys, amount: s.amount }).then((r) => {
+        log(s, r.ok);
+        if (!r.ok) { try { new Notification({ title: 'เงินเข้าแล้ว ' + s.amount + ' ฿', body: 'กรุณากดรับชำระเอง (' + r.reason + ')' }).show(); } catch (e) { /* ignore */ } }
+      }).catch(() => log(s, false));
+    }, 150);
+  }
   if (s.note !== 'replaced') { hideWin(); setTimeout(() => { if (!sessions.waiting()) send({ type: 'idle' }); }, 5000); }
 }
 
@@ -89,7 +99,7 @@ function openLink() {
 let setWin = null;
 function openSettings() {
   if (setWin && !setWin.isDestroyed()) { setWin.show(); setWin.focus(); return; }
-  setWin = new BrowserWindow({ width: 460, height: 720, autoHideMenuBar: true, title: 'ตั้งค่า QR ล็อกยอด',
+  setWin = new BrowserWindow({ width: 460, height: 860, autoHideMenuBar: true, title: 'ตั้งค่า QR ล็อกยอด',
     webPreferences: { preload: path.join(__dirname, 'preload-settings.js'), contextIsolation: true, nodeIntegration: false } });
   setWin.on('closed', () => { setWin = null; });
   setWin.loadFile(path.join(__dirname, 'settings.html'));
@@ -103,6 +113,14 @@ async function applyConfig(input) {
   n.hotkey = String(n.hotkey || '').trim();
   n.qrTemplate = String(n.qrTemplate || '').trim();
   n.transferCodes = (n.transferCodes || []).map(String);
+  const at = { ...DEFAULTS.autoType, ...(cfg.autoType || {}), ...(input.autoType || {}) };
+  at.enabled = !!at.enabled; at.windowTitleContains = String(at.windowTitleContains || '').trim();
+  at.keys = (Array.isArray(at.keys) ? at.keys : []).map((k) => String(k).trim()).filter(Boolean);
+  n.autoType = at;
+  if (at.enabled) {
+    if (!at.windowTitleContains) return { ok: false, error: 'ต้องใส่ชื่อหน้าต่าง Sea & Hill' };
+    try { require('./autotype').buildSteps(at.keys, '1.00'); } catch (e) { return { ok: false, error: 'ลำดับปุ่ม: ' + e.message }; }
+  }
   if (n.transferCodes.some((c) => !/^\d{2}$/.test(c))) return { ok: false, error: 'รหัสประเภทต้องเป็นตัวเลข 2 หลัก' };
   if (n.enabled) {
     const v = validateTemplate(n.qrTemplate);

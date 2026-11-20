@@ -19,6 +19,9 @@ button{font-size:16px;padding:9px 16px;border:0;border-radius:6px;background:#0a
 <div class="row"><div><label>ปุ่มลัด</label><input id="hotkey"></div>
 <div><label>พอร์ตจอลูกค้า</label><input id="displayPort" type="number"></div></div>
 <label>รหัสประเภทที่เป็นเงินโอน <span class="h">(คั่นด้วยจุลภาค เช่น 02)</span></label><input id="transferCodes">
+<hr><label><input type="checkbox" id="atEnabled" style="width:auto"> กรอกลง Sea &amp; Hill อัตโนมัติเมื่อเงินเข้า <span class="h">(ปิดอยู่ = แค่แจ้งว่าเงินเข้าแล้ว)</span></label>
+<label>ชื่อหน้าต่าง Sea &amp; Hill <span class="h">(ข้อความบางส่วนบนแถบหัวหน้าต่าง)</span></label><input id="atTitle">
+<label>ลำดับปุ่ม <span class="h">(คั่นด้วยจุลภาค เช่น F5,02,ENTER,{AMOUNT},ENTER · WAIT:300 = หน่วงเวลา มิลลิวินาที)</span></label><input id="atKeys">
 <button id="save">บันทึก</button> <span id="m"></span>
 <script src="vendor/qrcode.js"></script>
 <script>
@@ -27,8 +30,8 @@ async function check(){const t=$('qrTemplate').value.trim();$('pv').innerHTML=''
  const r=await qrlockSet.validate(t);$('tv').className=r.ok?'ok':'err';
  if(r.ok){$('tv').textContent='ต้นแบบถูกต้อง ✓ (ตัวอย่าง QR ยอด 1 บาท ใช้สแกนทดสอบได้)';const q=qrcode(0,'M');q.addData(r.sample);q.make();$('pv').innerHTML=q.createSvgTag({cellSize:4,margin:4,scalable:true})}
  else $('tv').textContent='ต้นแบบใช้ไม่ได้: '+r.error}
-qrlockSet.load().then(c=>{$('enabled').checked=!!c.enabled;F.forEach(k=>$(k).value=c[k]??'');$('transferCodes').value=(c.transferCodes||[]).join(',');check()});
+qrlockSet.load().then(c=>{$('enabled').checked=!!c.enabled;F.forEach(k=>$(k).value=c[k]??'');$('transferCodes').value=(c.transferCodes||[]).join(',');const a=c.autoType||{};$('atEnabled').checked=!!a.enabled;$('atTitle').value=a.windowTitleContains||'';$('atKeys').value=(a.keys||[]).join(',');check()});
 $('qrTemplate').oninput=check;
 $('save').onclick=async()=>{const c={enabled:$('enabled').checked,transferCodes:$('transferCodes').value.split(',').map(s=>s.trim()).filter(Boolean)};
- F.forEach(k=>c[k]=$(k).value);const r=await qrlockSet.save(c);$('m').className=r.ok?'ok':'err';$('m').textContent=r.ok?'บันทึกแล้ว ✓':r.error}
+ F.forEach(k=>c[k]=$(k).value);c.autoType={enabled:$('atEnabled').checked,windowTitleContains:$('atTitle').value,keys:$('atKeys').value.split(',').map(s=>s.trim()).filter(Boolean)};const r=await qrlockSet.save(c);$('m').className=r.ok?'ok':'err';$('m').textContent=r.ok?'บันทึกแล้ว ✓':r.error}
 </script></body></html>
