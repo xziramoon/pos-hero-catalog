@@ -31,11 +31,13 @@ body::after{content:"";position:fixed;inset:16px;border:1px solid var(--gold);bo
 .row{display:flex;flex-direction:column;align-items:center;gap:10px}
 .big{font-size:clamp(34px,10vmin,88px);font-weight:800;color:var(--gold);text-shadow:0 3px 0 #5a0714}
 .tick{width:min(26vw,16vh);aspect-ratio:1;border-radius:50%;background:#1fa65a;border:5px solid var(--gold);display:flex;align-items:center;justify-content:center;font-size:min(16vw,10vh);box-shadow:0 6px 16px rgba(0,0,0,.4)}
+#aw{position:fixed;left:0;right:0;bottom:0;padding:10px;font-size:15px;background:#ffd24a;color:#4a0a14;font-weight:700;z-index:5;display:none}
+#nv{position:fixed;width:2px;height:2px;opacity:.01;left:0;top:0;pointer-events:none}
 #st{position:fixed;top:0;left:0;right:0;padding:6px;font-size:15px;background:#000;color:#ffd24a;display:none;z-index:5}
 .paidbg{background:radial-gradient(120% 90% at 50% 18%,#2fae68 0%,#12703c 60%,#0a4a28 100%)!important}
 @media (orientation:landscape) and (max-height:520px){#v{flex-direction:row;gap:24px}.mascot{--w:30vh!important}}
 </style></head><body>
-<div id="st">⚠ ไม่ได้เชื่อมต่อ</div><div id="v"></div>
+<video id="nv" muted playsinline loop></video><div id="aw">แตะหน้าจอ 1 ครั้ง เพื่อกันจอดับ (ให้รับ QR ได้ตลอด)</div><div id="st">⚠ ไม่ได้เชื่อมต่อ</div><div id="v"></div>
 <script src="/qrcode.js"></script>
 <script>
 var v=document.getElementById('v'),st=document.getElementById('st'),timer=null,ws,wl,SHOP='อึ้งลักเส็ง',lastRx=Date.now(),retry=null;
@@ -62,7 +64,13 @@ function connect(){clearTimeout(retry);if(ws){ws.onopen=ws.onmessage=ws.onclose=
 function check(){if(!ws||(ws.readyState!==1&&ws.readyState!==0)||Date.now()-lastRx>25000){st.style.display='block';connect()}}
 setInterval(check,5000);document.addEventListener('visibilitychange',function(){if(!document.hidden)check()});
 window.addEventListener('focus',check);window.addEventListener('online',check);window.addEventListener('pageshow',check);
-function wake(){try{navigator.wakeLock.request('screen').then(function(l){wl=l},function(){})}catch(e){}}
-document.addEventListener('click',wake);document.addEventListener('visibilitychange',function(){if(!document.hidden)wake()});
+// กันจอดับ 2 ชั้น: (1) Screen Wake Lock (ใช้ได้เฉพาะ https) (2) วิดีโอเล่นวนซ่อนไว้ — ใช้ได้บน http ธรรมดา ต้องแตะหน้าจอ 1 ครั้งหลังเปิดหน้า
+var awOn=false,aw=document.getElementById('aw'),nv=document.getElementById('nv');
+function nvStart(){if(awOn)return;try{var c=document.createElement('canvas');c.width=c.height=16;var x=c.getContext('2d'),n=0;setInterval(function(){x.fillStyle=(n++%2)?'#111':'#222';x.fillRect(0,0,16,16)},500);
+ nv.srcObject=c.captureStream(2);var p=nv.play();if(p&&p.then)p.then(function(){awOn=true;aw.style.display='none'},function(){aw.style.display='block'});else{awOn=true;aw.style.display='none'}}catch(e){aw.style.display='block'}}
+function wake(){try{navigator.wakeLock.request('screen').then(function(l){wl=l;l.addEventListener('release',function(){wl=null})},function(){})}catch(e){}
+ if(!awOn)nvStart();if(nv.paused&&awOn){try{nv.play()}catch(e){}}}
+document.addEventListener('click',wake);document.addEventListener('touchstart',wake);document.addEventListener('visibilitychange',function(){if(!document.hidden)wake()});
+setTimeout(function(){if(!awOn)aw.style.display='block'},1500);
 render({type:'idle'});connect();wake();
 </script></body></html>
