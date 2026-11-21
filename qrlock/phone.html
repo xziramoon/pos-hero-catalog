@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="th"><head><meta charset="utf-8"><title>ควบคุมมือถือ</title>
+<style>
+body{margin:0;padding:14px;font-family:system-ui,"Noto Sans Thai",sans-serif;background:#fff;color:#111;font-size:14px}
+h3{margin:14px 0 4px;font-size:15px} .h{color:#666;font-size:12px;margin:2px 0 6px}
+input,select{font-size:14px;padding:5px;width:100%;box-sizing:border-box;margin:3px 0}
+button{font-size:14px;padding:7px 12px;border:0;border-radius:6px;background:#0a7;color:#fff;margin:3px 3px 3px 0;cursor:pointer}
+button.g{background:#555} #m{min-height:20px;margin-top:8px;font-weight:600;white-space:pre-wrap}
+.ok{color:#0a7}.bad{color:#c22} hr{border:0;border-top:1px solid #ddd;margin:12px 0}
+</style></head><body>
+<label><input type="checkbox" id="en" style="width:auto"> เปิดใช้การควบคุมมือถือ</label>
+
+<h3>1) โปรแกรม adb</h3>
+<div class="h" id="adbSt">กำลังตรวจ...</div>
+<button id="inst">⬇️ ดาวน์โหลด adb (จาก Google, ~10MB)</button>
+
+<h3>2) เปิดการแก้ปัญหาไร้สายบนมือถือ</h3>
+<div class="h">มือถือ: ตั้งค่า → เกี่ยวกับโทรศัพท์ → แตะ "หมายเลขบิลด์" 7 ครั้ง → ตั้งค่า → ตัวเลือกสำหรับนักพัฒนา → เปิด "การแก้ปัญหาไร้สาย" (Wireless debugging) · ต้องต่อ WiFi เดียวกับคอม · ต้องเป็น Android 11 ขึ้นไป</div>
+
+<h3>3) จับคู่ (ครั้งเดียว)</h3>
+<div class="h">ในหน้า Wireless debugging กด "จับคู่อุปกรณ์ด้วยรหัสการจับคู่" แล้วกรอกที่อยู่กับรหัส 6 หลักที่แสดง</div>
+<input id="pa" placeholder="ที่อยู่จับคู่ เช่น 192.168.1.50:37123"><input id="pc" placeholder="รหัส 6 หลัก" maxlength="6">
+<button id="pair">จับคู่</button>
+
+<h3>4) เชื่อมต่อ</h3>
+<div class="h">ใช้ "ที่อยู่ IP และพอร์ต" ที่แสดงอยู่หน้าหลักของ Wireless debugging (คนละพอร์ตกับตอนจับคู่)</div>
+<input id="ad" placeholder="เช่น 192.168.1.50:41234"><button id="con">เชื่อมต่อ</button>
+<div class="h" id="devSt"></div>
+
+<h3>5) เลือกแอปรับเงิน</h3>
+<button class="g" id="ld">โหลดรายชื่อแอปจากมือถือ</button>
+<select id="pk"><option value="">— ยังไม่ได้เลือก —</option></select>
+<div class="h">ถ้ารายชื่อยาว ให้หาชื่อที่มี thung / ngern / ถุงเงิน / krungthai</div>
+
+<h3>6) เลือกปุ่มสลับ</h3>
+<div class="h">คลิกช่อง แล้วกดปุ่มที่ต้องการบนคีย์บอร์ด (เช่น Ctrl+F10) · Backspace = ล้างช่อง · แนะนำให้ใช้ร่วมกับ Ctrl/Alt เพราะปุ่มเดี่ยว (เช่น F10) จะถูกโปรแกรมนี้ดักไว้ ทำให้ Sea &amp; Hill ใช้ปุ่มนั้นไม่ได้</div>
+<label>เปิดแอปรับเงินบนมือถือ</label><input id="hp" class="key" readonly placeholder="คลิกแล้วกดปุ่ม">
+<label>กลับหน้าจอลูกค้า</label><input id="hd" class="key" readonly placeholder="คลิกแล้วกดปุ่ม">
+<label><input type="checkbox" id="auto" style="width:auto"> เปิดหน้าจอลูกค้าบนมือถืออัตโนมัติเมื่อกดสร้าง QR (F9)</label>
+
+<hr>
+<button id="sv">💾 บันทึก</button><button class="g" id="tp">ทดสอบ: เปิดแอปรับเงิน</button><button class="g" id="td">ทดสอบ: กลับหน้าจอลูกค้า</button>
+<div id="m"></div>
+<script>
+const $=id=>document.getElementById(id),P=window.qrlockPhone;
+const say=(t,ok)=>{$('m').className=ok===true?'ok':ok===false?'bad':'';$('m').textContent=t};
+function fields(){return{enabled:$('en').checked,address:$('ad').value.trim(),payPackage:$('pk').value,payHotkey:$('hp').value.trim(),displayHotkey:$('hd').value.trim(),autoDisplayOnQr:$('auto').checked}}
+async function refresh(){const s=await P.load();const c=s.cfg;
+ $('adbSt').innerHTML=s.status.adb?'<span class="ok">พร้อมใช้ ✅</span>':'<span class="bad">ยังไม่มี adb</span>';
+ $('devSt').textContent=s.status.devices.length?'อุปกรณ์ที่เห็น: '+s.status.devices.map(d=>d.id+' ('+d.state+')').join(', '):'ยังไม่เห็นมือถือที่เชื่อมอยู่';
+ $('en').checked=!!c.enabled;$('ad').value=c.address||'';$('hp').value=c.payHotkey||'';$('hd').value=c.displayHotkey||'';$('auto').checked=!!c.autoDisplayOnQr;
+ if(c.payPackage){$('pk').innerHTML='<option value="'+c.payPackage+'">'+c.payPackage+'</option>'}}
+$('inst').onclick=async()=>{say('กำลังดาวน์โหลด...');try{const r=await P.install();say(r.ok?'ติดตั้ง adb แล้ว ✅':'ไม่สำเร็จ: '+r.error,r.ok);refresh()}catch(e){say('ไม่สำเร็จ: '+e.message,false)}};
+$('pair').onclick=async()=>{say('กำลังจับคู่...');const r=await P.pair($('pa').value.trim(),$('pc').value.trim());say(r.ok?'จับคู่แล้ว ✅ ต่อไปกรอกข้อ 4':'ไม่สำเร็จ: '+r.error,r.ok)};
+$('con').onclick=async()=>{say('กำลังเชื่อมต่อ...');const r=await P.connect($('ad').value.trim());say(r.ok?'เชื่อมต่อแล้ว ✅ (ถ้ามือถือขึ้นให้อนุญาต กดอนุญาต)':'ไม่สำเร็จ: '+r.error,r.ok);refresh()};
+$('ld').onclick=async()=>{say('กำลังโหลด...');await P.save(fields());const r=await P.apps();if(!r.ok)return say('ไม่สำเร็จ: '+r.error,false);
+ const cur=$('pk').value;$('pk').innerHTML='<option value="">— ยังไม่ได้เลือก —</option>'+r.apps.map(a=>'<option'+(a===cur?' selected':'')+'>'+a+'</option>').join('');say('พบ '+r.apps.length+' แอป เลือกแอปรับเงินแล้วกดบันทึก',true)};
+$('sv').onclick=async()=>{const r=await P.save(fields());say(r.ok?(r.warn?'⚠️ '+r.warn:'บันทึกแล้ว ✅'):'ไม่สำเร็จ: '+r.error,r.ok&&!r.warn)};
+$('tp').onclick=async()=>{await P.save(fields());const r=await P.openPay();say(r.ok?'ส่งคำสั่งแล้ว ✅ ดูที่มือถือ':'ไม่สำเร็จ: '+r.error,r.ok)};
+$('td').onclick=async()=>{await P.save(fields());const r=await P.openDisplay();say(r.ok?'ส่งคำสั่งแล้ว ✅ ดูที่มือถือ':'ไม่สำเร็จ: '+r.error,r.ok)};
+// จับปุ่มที่กด → รูปแบบ accelerator ของ Electron (Ctrl+F10, Alt+Q ...)
+const NAMED={' ':'Space',ArrowUp:'Up',ArrowDown:'Down',ArrowLeft:'Left',ArrowRight:'Right',Enter:'Enter',Tab:'Tab',Insert:'Insert',Delete:'Delete',Home:'Home',End:'End',PageUp:'PageUp',PageDown:'PageDown'};
+function accel(e){const k=e.key;if(['Control','Shift','Alt','Meta'].includes(k))return null;let main;
+ if(/^F([1-9]|1[0-9]|2[0-4])$/.test(k))main=k;else if(NAMED[k])main=NAMED[k];else if(k.length===1&&/[a-z0-9]/i.test(k))main=k.toUpperCase();else return null;
+ return[e.ctrlKey&&'Ctrl',e.altKey&&'Alt',e.shiftKey&&'Shift',main].filter(Boolean).join('+')}
+document.querySelectorAll('.key').forEach(el=>el.addEventListener('keydown',e=>{
+ if(e.key==='Backspace'||e.key==='Delete'){el.value='';e.preventDefault();return}
+ if(e.key==='Tab')return;e.preventDefault();const a=accel(e);if(a)el.value=a}));
+refresh();
+</script></body></html>

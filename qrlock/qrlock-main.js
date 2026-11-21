@@ -11,8 +11,12 @@ const { createSessions } = require('./session');
 const { createDisplayServer } = require('./display-server');
 const { createMatcher } = require('./matcher');
 const { runAutoType } = require('./autotype');
+const { createPhone, ADDR_RE, PKG_RE } = require('./phone');
 
-const DEFAULTS = { enabled: false, machineName: 'เครื่อง 1', bank: '', qrTemplate: '', shopName: '', expirySec: 180, warnAmountOver: 10000, hotkey: 'F9', transferCodes: ['02'], displayPort: 8080, autoType: { enabled: false, windowTitleContains: '', keys: [] } };
+const DEFAULTS = { enabled: false, machineName: 'เครื่อง 1', bank: '', qrTemplate: '', shopName: '', expirySec: 180, warnAmountOver: 10000, hotkey: 'F9', transferCodes: ['02'], displayPort: 8080, autoType: { enabled: false, windowTitleContains: '', keys: [] },
+  phone: { enabled: false, adbPath: '', address: '', payPackage: '', payHotkey: 'Ctrl+F10', displayHotkey: 'Ctrl+F11', autoDisplayOnQr: false } };
+const phoneCfg = () => ({ ...DEFAULTS.phone, ...(cfg.phone || {}) });
+let phone = null, phoneKeys = [];
 let ctx = null, cfg = { ...DEFAULTS }, win = null, server = null, sessions = null, timer = null, lastMsg = { type: 'idle' }, active = false;
 let cfgPath = null, logPath = null;
 
@@ -63,6 +67,60 @@ function onSessionChange(s) {
   if (s.note !== 'replaced') { hideWin(); setTimeout(() => { if (!sessions.waiting()) send({ type: 'idle' }); }, 5000); }
 }
 
+// ---- ควบคุมมือถือ (ADB ผ่าน WiFi): ปุ่มลัดสลับไปแอปรับเงิน / กลับหน้าจอลูกค้า ----
+function displayUrl() {
+  const p = phoneCfg();
+  const ips = lanIps();
+  const peer = String(p.address || '').split(':')[0].split('.').slice(0, 3).join('.');
+  const ip = ips.find((x) => peer && x.startsWith(peer + '.')) || ips[0];
+  return ip ? 'http://' + ip + ':' + cfg.displayPort + '/display' : null;
+}
+function notifyPhoneFail(what, r) {
+  try { new Notification({ title: 'สั่งมือถือไม่สำเร็จ', body: what + ': ' + ((r && r.error) || 'ไม่ทราบสาเหตุ') }).show(); } catch (e) { /* ignore */ }
+}
+async function phoneOpenPay() { const r = await phone.openPay(); if (!r.ok) notifyPhoneFail('เปิดแอปรับเงิน', r); return r; }
+async function phoneOpenDisplay() {
+  const u = displayUrl();
+  const r = u ? await phone.openDisplay(u) : { ok: false, error: 'ไม่พบ IP ของคอม' };
+  if (!r.ok) notifyPhoneFail('กลับหน้าจอลูกค้า', r);
+  return r;
+}
+function registerPhoneKeys() {
+  unregisterPhoneKeys();
+  const p = phoneCfg();
+  const failed = [];
+  if (!p.enabled || !phone) return failed;
+  [[p.payHotkey, phoneOpenPay], [p.displayHotkey, phoneOpenDisplay]].forEach(([k, fn]) => {
+    if (!k) return;
+    try { if (globalShortcut.register(k, () => { fn().catch(() => {}); })) phoneKeys.push(k); else failed.push(k); } catch (e) { failed.push(k); console.warn('[qrlock] phone hotkey failed:', e && e.message); }
+  });
+  return failed;
+}
+function unregisterPhoneKeys() { phoneKeys.forEach((k) => { try { globalShortcut.unregister(k); } catch (e) { /* ignore */ } }); phoneKeys = []; }
+let phoneWin = null;
+function openPhone() {
+  if (phoneWin && !phoneWin.isDestroyed()) { phoneWin.show(); phoneWin.focus(); return; }
+  phoneWin = new BrowserWindow({ width: 440, height: 860, autoHideMenuBar: true, title: 'ควบคุมมือถือ',
+    webPreferences: { preload: path.join(__dirname, 'preload-phone.js'), contextIsolation: true, nodeIntegration: false } });
+  phoneWin.on('closed', () => { phoneWin = null; });
+  phoneWin.loadFile(path.join(__dirname, 'phone.html'));
+}
+async function savePhone(input) {
+  const p = { ...phoneCfg(), ...(input || {}) };
+  p.enabled = !!p.enabled; p.autoDisplayOnQr = !!p.autoDisplayOnQr;
+  p.address = String(p.address || '').trim(); p.payPackage = String(p.payPackage || '').trim();
+  p.payHotkey = String(p.payHotkey || '').trim(); p.displayHotkey = String(p.displayHotkey || '').trim();
+  if (p.address && !ADDR_RE.test(p.address)) return { ok: false, error: 'ที่อยู่มือถือต้องเป็นรูปแบบ IP:พอร์ต' };
+  if (p.payPackage && !PKG_RE.test(p.payPackage)) return { ok: false, error: 'ชื่อแพ็กเกจแอปไม่ถูกต้อง' };
+  if (p.enabled && p.payHotkey && p.payHotkey === p.displayHotkey) return { ok: false, error: 'ปุ่มลัดสองปุ่มต้องไม่ซ้ำกัน' };
+  if ([p.payHotkey, p.displayHotkey].includes(cfg.hotkey)) return { ok: false, error: 'ปุ่มลัดซ้ำกับปุ่มกรอกยอด (' + cfg.hotkey + ')' };
+  cfg.phone = p; saveConfig();
+  const failed = active ? registerPhoneKeys() : [];
+  if (failed.length) return { ok: true, warn: 'ปุ่ม ' + failed.join(', ') + ' ใช้ไม่ได้ (โปรแกรมอื่นใช้อยู่) ลองเปลี่ยนปุ่ม' };
+  if (p.enabled && !active) return { ok: true, warn: 'บันทึกแล้ว แต่ปุ่มลัดจะทำงานเมื่อเปิด "QR ล็อกยอด"' };
+  return { ok: true };
+}
+
 async function start() {
   if (active) return;
   sessions = createSessions({ expirySec: cfg.expirySec, onChange: onSessionChange });
@@ -71,12 +129,14 @@ async function start() {
   try { if (cfg.hotkey) globalShortcut.register(cfg.hotkey, () => { if (sessions.waiting()) showWaiting(sessions.waiting()); else showInput(); }); } catch (e) { console.warn('[qrlock] hotkey failed:', e && e.message); }
   timer = setInterval(() => { try { sessions.tick(); } catch (e) { /* ignore */ } }, 1000);
   active = true;
+  registerPhoneKeys();
 }
 async function stop() {
   if (!active) return;
   active = false;
   clearInterval(timer); timer = null;
   try { if (cfg.hotkey) globalShortcut.unregister(cfg.hotkey); } catch (e) { /* ignore */ }
+  unregisterPhoneKeys();
   try { sessions.cancel(); } catch (e) { /* ignore */ }
   if (server) { try { await server.stop(); } catch (e) { /* ignore */ } server = null; }
   hideWin();
@@ -184,9 +244,19 @@ function registerIpc() {
     try { payload = buildQr(cfg.qrTemplate, amt); } catch (e) { return { error: e.message }; }
     const s = sessions.create({ amount: amt, payload, machine: cfg.machineName });
     send({ type: 'show_qr', payload, amount: amt, shopName: cfg.shopName, expiresInSec: cfg.expirySec });
+    if (phone && phoneCfg().enabled && phoneCfg().autoDisplayOnQr) phoneOpenDisplay().catch(() => {});
     showWaiting(s);
     return { ok: true };
   });
+  const guard = (fn) => async (_e, ...a) => { try { return await fn(...a); } catch (e) { return { ok: false, error: e.message }; } };
+  ipcMain.handle('qrlock:phone-load', async () => ({ cfg: phoneCfg(), status: await phone.status() }));
+  ipcMain.handle('qrlock:phone-save', guard((p) => savePhone(p)));
+  ipcMain.handle('qrlock:phone-install', guard(() => phone.install()));
+  ipcMain.handle('qrlock:phone-pair', guard((a, c) => phone.pair(a, c)));
+  ipcMain.handle('qrlock:phone-connect', guard((a) => phone.connect(a)));
+  ipcMain.handle('qrlock:phone-apps', guard(() => phone.listApps()));
+  ipcMain.handle('qrlock:phone-open-pay', guard(() => phone.openPay()));
+  ipcMain.handle('qrlock:phone-open-display', guard(() => { const u = displayUrl(); return u ? phone.openDisplay(u) : { ok: false, error: 'ไม่พบ IP ของคอม' }; }));
   ipcMain.on('qrlock:confirm-manual', () => { if (active) sessions.confirmManual(); });
   ipcMain.on('qrlock:cancel', () => { if (active) sessions.cancel(); });
   ipcMain.on('qrlock:close', () => { hideWin(); });
@@ -197,6 +267,7 @@ function init(context) {
   cfgPath = path.join(ctx.app.getPath('userData'), 'qrlock-config.json');
   logPath = path.join(ctx.app.getPath('userData'), 'qrlock-log.jsonl');
   cfg = loadConfig();
+  phone = createPhone({ dir: path.join(ctx.app.getPath('userData'), 'adb'), getCfg: phoneCfg });
   registerIpc();
   if (cfg.enabled) {
     const v = validateTemplate(cfg.qrTemplate);
@@ -208,6 +279,7 @@ function shutdown() { try { stop(); } catch (e) { /* ignore */ } }
 function trayItems() {
   return [{ label: '📒 รายการ QR วันนี้', click: () => openLog() },
   { label: '⚙️ ตั้งค่า QR ล็อกยอด', click: () => openSettings() },
+  { label: '📲 ควบคุมมือถือ (สลับแอปรับเงิน)', click: () => openPhone() },
   { label: '📱 เชื่อมจอลูกค้า (สแกนด้วยมือถือ)', click: () => {
     if (!active) { require('electron').dialog.showErrorBox('QR ล็อกยอด', 'ต้องเปิด "QR ล็อกยอด" ก่อน'); return; }
     openLink();
