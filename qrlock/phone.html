@@ -32,8 +32,10 @@ button.g{background:#555} #m{min-height:20px;margin-top:8px;font-weight:600;whit
 <select id="pk"><option value="">— ยังไม่ได้เลือก —</option></select>
 <div class="h">ถ้ารายชื่อยาว ให้หาชื่อที่มี thung / ngern / ถุงเงิน / krungthai</div>
 
-<h3>6) ปุ่มลัด</h3>
-<input id="hp" placeholder="เปิดแอปรับเงิน เช่น Ctrl+F10"><input id="hd" placeholder="กลับหน้าจอลูกค้า เช่น Ctrl+F11">
+<h3>6) เลือกปุ่มสลับ</h3>
+<div class="h">คลิกช่อง แล้วกดปุ่มที่ต้องการบนคีย์บอร์ด (เช่น Ctrl+F10) · Backspace = ล้างช่อง · แนะนำให้ใช้ร่วมกับ Ctrl/Alt เพราะปุ่มเดี่ยว (เช่น F10) จะถูกโปรแกรมนี้ดักไว้ ทำให้ Sea &amp; Hill ใช้ปุ่มนั้นไม่ได้</div>
+<label>เปิดแอปรับเงินบนมือถือ</label><input id="hp" class="key" readonly placeholder="คลิกแล้วกดปุ่ม">
+<label>กลับหน้าจอลูกค้า</label><input id="hd" class="key" readonly placeholder="คลิกแล้วกดปุ่ม">
 <label><input type="checkbox" id="auto" style="width:auto"> เปิดหน้าจอลูกค้าบนมือถืออัตโนมัติเมื่อกดสร้าง QR (F9)</label>
 
 <hr>
@@ -53,8 +55,16 @@ $('pair').onclick=async()=>{say('กำลังจับคู่...');const r=
 $('con').onclick=async()=>{say('กำลังเชื่อมต่อ...');const r=await P.connect($('ad').value.trim());say(r.ok?'เชื่อมต่อแล้ว ✅ (ถ้ามือถือขึ้นให้อนุญาต กดอนุญาต)':'ไม่สำเร็จ: '+r.error,r.ok);refresh()};
 $('ld').onclick=async()=>{say('กำลังโหลด...');await P.save(fields());const r=await P.apps();if(!r.ok)return say('ไม่สำเร็จ: '+r.error,false);
  const cur=$('pk').value;$('pk').innerHTML='<option value="">— ยังไม่ได้เลือก —</option>'+r.apps.map(a=>'<option'+(a===cur?' selected':'')+'>'+a+'</option>').join('');say('พบ '+r.apps.length+' แอป เลือกแอปรับเงินแล้วกดบันทึก',true)};
-$('sv').onclick=async()=>{const r=await P.save(fields());say(r.ok?'บันทึกแล้ว ✅':'ไม่สำเร็จ: '+r.error,r.ok)};
+$('sv').onclick=async()=>{const r=await P.save(fields());say(r.ok?(r.warn?'⚠️ '+r.warn:'บันทึกแล้ว ✅'):'ไม่สำเร็จ: '+r.error,r.ok&&!r.warn)};
 $('tp').onclick=async()=>{await P.save(fields());const r=await P.openPay();say(r.ok?'ส่งคำสั่งแล้ว ✅ ดูที่มือถือ':'ไม่สำเร็จ: '+r.error,r.ok)};
 $('td').onclick=async()=>{await P.save(fields());const r=await P.openDisplay();say(r.ok?'ส่งคำสั่งแล้ว ✅ ดูที่มือถือ':'ไม่สำเร็จ: '+r.error,r.ok)};
+// จับปุ่มที่กด → รูปแบบ accelerator ของ Electron (Ctrl+F10, Alt+Q ...)
+const NAMED={' ':'Space',ArrowUp:'Up',ArrowDown:'Down',ArrowLeft:'Left',ArrowRight:'Right',Enter:'Enter',Tab:'Tab',Insert:'Insert',Delete:'Delete',Home:'Home',End:'End',PageUp:'PageUp',PageDown:'PageDown'};
+function accel(e){const k=e.key;if(['Control','Shift','Alt','Meta'].includes(k))return null;let main;
+ if(/^F([1-9]|1[0-9]|2[0-4])$/.test(k))main=k;else if(NAMED[k])main=NAMED[k];else if(k.length===1&&/[a-z0-9]/i.test(k))main=k.toUpperCase();else return null;
+ return[e.ctrlKey&&'Ctrl',e.altKey&&'Alt',e.shiftKey&&'Shift',main].filter(Boolean).join('+')}
+document.querySelectorAll('.key').forEach(el=>el.addEventListener('keydown',e=>{
+ if(e.key==='Backspace'||e.key==='Delete'){el.value='';e.preventDefault();return}
+ if(e.key==='Tab')return;e.preventDefault();const a=accel(e);if(a)el.value=a}));
 refresh();
 </script></body></html>

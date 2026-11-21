@@ -88,11 +88,13 @@ async function phoneOpenDisplay() {
 function registerPhoneKeys() {
   unregisterPhoneKeys();
   const p = phoneCfg();
-  if (!p.enabled || !phone) return;
+  const failed = [];
+  if (!p.enabled || !phone) return failed;
   [[p.payHotkey, phoneOpenPay], [p.displayHotkey, phoneOpenDisplay]].forEach(([k, fn]) => {
     if (!k) return;
-    try { if (globalShortcut.register(k, () => { fn().catch(() => {}); })) phoneKeys.push(k); } catch (e) { console.warn('[qrlock] phone hotkey failed:', e && e.message); }
+    try { if (globalShortcut.register(k, () => { fn().catch(() => {}); })) phoneKeys.push(k); else failed.push(k); } catch (e) { failed.push(k); console.warn('[qrlock] phone hotkey failed:', e && e.message); }
   });
+  return failed;
 }
 function unregisterPhoneKeys() { phoneKeys.forEach((k) => { try { globalShortcut.unregister(k); } catch (e) { /* ignore */ } }); phoneKeys = []; }
 let phoneWin = null;
@@ -113,7 +115,9 @@ async function savePhone(input) {
   if (p.enabled && p.payHotkey && p.payHotkey === p.displayHotkey) return { ok: false, error: 'ปุ่มลัดสองปุ่มต้องไม่ซ้ำกัน' };
   if ([p.payHotkey, p.displayHotkey].includes(cfg.hotkey)) return { ok: false, error: 'ปุ่มลัดซ้ำกับปุ่มกรอกยอด (' + cfg.hotkey + ')' };
   cfg.phone = p; saveConfig();
-  if (active) registerPhoneKeys();
+  const failed = active ? registerPhoneKeys() : [];
+  if (failed.length) return { ok: true, warn: 'ปุ่ม ' + failed.join(', ') + ' ใช้ไม่ได้ (โปรแกรมอื่นใช้อยู่) ลองเปลี่ยนปุ่ม' };
+  if (p.enabled && !active) return { ok: true, warn: 'บันทึกแล้ว แต่ปุ่มลัดจะทำงานเมื่อเปิด "QR ล็อกยอด"' };
   return { ok: true };
 }
 
