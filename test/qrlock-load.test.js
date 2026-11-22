@@ -10,5 +10,5 @@ for (const f of fs.readdirSync(dir).filter((x) => x.endsWith('.js'))) {
 const M = require('module'), orig = M._load;
 M._load = function (r, ...a) { if (r === 'electron') return new Proxy({}, { get: () => class {} }); return orig.call(this, r, ...a); };
 const m = require('../qrlock/qrlock-main');
-assert.deepStrictEqual(Object.keys(m).sort(), ['init', 'shutdown', 'trayItems']);
+assert.deepStrictEqual(Object.keys(m).sort(), ['enableCartDisplay', 'init', 'showCart', 'shutdown', 'trayItems']);
 console.log('qrlock-load: ok');

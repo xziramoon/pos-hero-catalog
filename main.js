@@ -24,6 +24,9 @@ try { fortune = require('./fortune/fortune-main'); } catch (e) { console.warn('[
 // QR ล็อกยอด — โมดูลแยกใน ./qrlock ปิดได้ใน qrlock-config.json; พังตรงนี้ต้องไม่กระทบ POS
 let qrlock = null;
 try { qrlock = require('./qrlock/qrlock-main'); } catch (e) { console.warn('[qrlock] load failed:', e && e.message); qrlock = null; }
+// จอลูกค้าแสดงรายการสินค้า — โมดูลแยก ./custdisplay (ค่าเริ่มต้นปิด) ใช้เซิร์ฟเวอร์จอของ qrlock; พังตรงนี้ต้องไม่กระทบ POS
+let custdisplay = null;
+try { custdisplay = require('./custdisplay'); } catch (e) { console.warn('[custdisplay] load failed:', e && e.message); custdisplay = null; }
 
 autoUpdater.autoDownload = true;
 autoUpdater.autoInstallOnAppQuit = true;
@@ -212,6 +215,7 @@ function refreshTrayMenu() {
     { type: 'separator' },
     ...(fortune ? (() => { try { return fortune.trayItems(); } catch (e) { return []; } })() : []),
     ...(qrlock ? (() => { try { return qrlock.trayItems(); } catch (e) { return []; } })() : []),
+    ...(custdisplay && qrlock ? (() => { try { return custdisplay.trayItems(); } catch (e) { return []; } })() : []),
     { label: '🔄 ตรวจสอบอัปเดต', click: () => {
       manualUpdateCheck = true;
       // The 'error' event (below) already shows a notification and covers
@@ -344,6 +348,8 @@ app.whenReady().then(() => {
   } catch (e) { console.warn('[fortune] init failed:', e && e.message); }
 
   try { if (qrlock) qrlock.init({ app, onChange: () => { try { refreshTrayMenu(); } catch (e) { /* ignore */ } } }); } catch (e) { console.warn('[qrlock] init failed:', e && e.message); }
+
+  try { if (custdisplay && qrlock) custdisplay.init({ app, qrlock, onChange: () => { try { refreshTrayMenu(); } catch (e) { /* ignore */ } } }); } catch (e) { console.warn('[custdisplay] init failed:', e && e.message); }
 
   try {
     if (catalog) catalog.init({ app, getMainWindow: () => mainWindow, userDataDir: app.getPath('userData'), config: {} });
@@ -573,6 +579,7 @@ ipcMain.handle('print:raw', async (_event, arg) => {
 
 app.on('before-quit', () => {
   try { if (fortune) fortune.shutdown(); } catch (e) { /* ignore */ }
+  try { if (custdisplay) custdisplay.shutdown(); } catch (e) { /* ignore */ }
   try { if (qrlock) qrlock.shutdown(); } catch (e) { /* ignore */ }
   isQuitting = true;
 });

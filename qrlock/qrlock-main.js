@@ -9,6 +9,7 @@ const { BrowserWindow, globalShortcut, ipcMain, Notification } = require('electr
 const { buildQr, validateTemplate, formatAmount } = require('./qr-builder');
 const { createSessions } = require('./session');
 const { createDisplayServer } = require('./display-server');
+const { createCartGate } = require('./cart-gate');
 const { createMatcher } = require('./matcher');
 const { runAutoType } = require('./autotype');
 const { createPhone, ADDR_RE, PKG_RE } = require('./phone');
@@ -26,6 +27,40 @@ function log(s, autoTyped) {
   try { fs.appendFileSync(logPath, JSON.stringify({ startedAt: new Date(s.startedAt).toISOString(), machine: s.machine, staff: s.staff, amount: s.amount, status: s.status, endedAt: s.endedAt ? new Date(s.endedAt).toISOString() : null, matchedText: s.matchedText || null, autoTyped: !!autoTyped }) + '\n'); } catch (e) { /* ignore */ }
 }
 function send(msg) { msg = { shopName: cfg.shopName || undefined, ...msg }; lastMsg = msg; if (server) server.broadcast(msg); }
+
+// ---- จอลูกค้าแบบแสดงรายการสินค้า (โมดูล custdisplay) ใช้เซิร์ฟเวอร์จอเดียวกัน ----
+// เซิร์ฟเวอร์เปิดเมื่ออย่างใดอย่างหนึ่งต้องใช้ ('qr' = QR ล็อกยอด, 'cd' = custdisplay) ปิดเมื่อไม่มีใครใช้
+const serverUsers = new Set();
+let serverPort = null, serverLock = Promise.resolve(), cartOn = false;
+const gate = createCartGate({ send: (m) => send(m), isWaiting: () => !!(sessions && sessions.waiting()) });
+const locked = (fn) => { const p = serverLock.then(fn, fn); serverLock = p.catch(() => {}); return p; };
+function acquireServer(who) {
+  return locked(async () => {
+    serverUsers.add(who);
+    if (server && serverPort !== cfg.displayPort) { try { await server.stop(); } catch (e) { /* ignore */ } server = null; } // เปลี่ยนพอร์ต
+    if (!server) {
+      const s = createDisplayServer({ port: cfg.displayPort, getLastMessage: () => lastMsg, assetsDir: __dirname });
+      try { await s.start(); server = s; serverPort = cfg.displayPort; } catch (e) { console.warn('[qrlock] display server failed:', e && e.message); server = null; }
+    }
+    return server ? serverPort : null;
+  });
+}
+function releaseServer(who) {
+  return locked(async () => {
+    serverUsers.delete(who);
+    if (!serverUsers.size && server) { try { await server.stop(); } catch (e) { /* ignore */ } server = null; }
+  });
+}
+// custdisplay เปิด/ปิด (คืนพอร์ตของเซิร์ฟเวอร์ หรือ null ถ้าเปิดไม่ได้)
+async function enableCartDisplay(on) {
+  if (on) { cartOn = true; return acquireServer('cd'); }
+  cartOn = false; gate.clear();
+  await releaseServer('cd');
+  if (active && !(sessions && sessions.waiting())) send({ type: 'idle' });
+  return null;
+}
+// ส่งรายการสินค้า/จ่ายเงิน/ขอบคุณ ไปที่จอ (QR มีสิทธิ์ก่อน ดู cart-gate.js)
+function showCart(msg) { if (cartOn && msg) gate.offer({ machine: cfg.machineName, ...msg }); }
 function push(state) { if (win && !win.isDestroyed()) win.webContents.send('qrlock:state', state); }
 function hideWin() { if (win && !win.isDestroyed()) win.hide(); }
 
@@ -64,7 +99,11 @@ function onSessionChange(s) {
       }).catch(() => log(s, false));
     }, 150);
   }
-  if (s.note !== 'replaced') { hideWin(); setTimeout(() => { if (!sessions.waiting()) send({ type: 'idle' }); }, 5000); }
+  if (s.note !== 'replaced') {
+    gate.qrEnded();
+    hideWin();
+    setTimeout(() => { if (!sessions.waiting() && !gate.release()) send({ type: 'idle' }); }, 5000);
+  }
 }
 
 // ---- ควบคุมมือถือ (ADB ผ่าน WiFi): ปุ่มลัดสลับไปแอปรับเงิน / กลับหน้าจอลูกค้า ----
@@ -124,8 +163,7 @@ async function savePhone(input) {
 async function start() {
   if (active) return;
   sessions = createSessions({ expirySec: cfg.expirySec, onChange: onSessionChange });
-  server = createDisplayServer({ port: cfg.displayPort, getLastMessage: () => lastMsg, assetsDir: __dirname });
-  try { await server.start(); } catch (e) { console.warn('[qrlock] display server failed:', e && e.message); server = null; }
+  await acquireServer('qr');
   try { if (cfg.hotkey) globalShortcut.register(cfg.hotkey, () => { if (sessions.waiting()) showWaiting(sessions.waiting()); else showInput(); }); } catch (e) { console.warn('[qrlock] hotkey failed:', e && e.message); }
   timer = setInterval(() => { try { sessions.tick(); } catch (e) { /* ignore */ } }, 1000);
   active = true;
@@ -138,7 +176,7 @@ async function stop() {
   try { if (cfg.hotkey) globalShortcut.unregister(cfg.hotkey); } catch (e) { /* ignore */ }
   unregisterPhoneKeys();
   try { sessions.cancel(); } catch (e) { /* ignore */ }
-  if (server) { try { await server.stop(); } catch (e) { /* ignore */ } server = null; }
+  await releaseServer('qr');
   hideWin();
 }
 
@@ -291,4 +329,4 @@ function trayItems() {
     cfg.enabled = true; saveConfig(); await start();
   } }];
 }
-module.exports = { init, shutdown, trayItems };
+module.exports = { init, shutdown, trayItems, showCart, enableCartDisplay };

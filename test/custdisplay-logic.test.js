@@ -56,7 +56,8 @@ v = L.view(st, 2000);
 assert.deepStrictEqual([v.type, v.fallback, v.items.length, v.total], ['cart', false, 1, 225]);
 run(st, [main('R1', 245, MILK)]);
 v = L.view(st, 2000);
-assert.deepStrictEqual([v.fallback, v.items.length, v.last], [false, 2, '111']);
+assert.deepStrictEqual([v.fallback, v.items.length], [false, 2]);
+assert.strictEqual(v.items.find((i) => i.id === v.last).barcode, '111');
 run(st, [main('R1', 265, MILK2)]);
 v = L.view(st, 2000);
 assert.strictEqual(v.items.length, 2); // upsert ไม่เพิ่มบรรทัดใหม่
@@ -65,7 +66,8 @@ run(st, [main('R1', 285, MILK3)]);
 assert.strictEqual(L.view(st, 2000).items[1].qty, 3);
 run(st, [main('R1', 225, MILKDEL)]);
 v = L.view(st, 2000);
-assert.deepStrictEqual([v.fallback, v.items.length, v.last], [false, 1, '8850822011676']);
+assert.deepStrictEqual([v.fallback, v.items.length], [false, 1]);
+assert.strictEqual(v.items.find((i) => i.id === v.last).barcode, '8850822011676');
 
 // ยอดไม่ตรง (เช่น ส่วนลด) → fallback แสดงรายการล่าสุด + Total จาก POS
 run(st, [main('R1', 200, SERUM2.replace('เพิ่ม : ', ''))]);
@@ -132,3 +134,19 @@ console.log('custdisplay-logic.test.js: all passed');
   assert.deepStrictEqual([v2.fallback, v2.items.length, v2.total], [false, 1, 99]);
 }
 console.log('custdisplay-logic.test.js: real-log case passed');
+
+// สินค้าคนละชนิดที่รหัสซ้ำกัน (POS จริงมีสินค้ารหัส "..") ต้องไม่ทับกัน
+{
+  const D1 = '../ใบมีดโกน โลเล็กซ์ 10โหล/กล่อง/@ 1.00 x 190.00 = 190.00';
+  const D2 = '../สบู่ก้อน/ก้อน/@ 1.00 x 10.00 = 10.00';
+  const s = L.createState();
+  L.reduce(s, main('R9', 0, null), 1000);
+  L.reduce(s, main('R9', 190, D1), 1300);
+  L.reduce(s, main('R9', 200, D2), 1600);
+  const v3 = L.view(s, 1700);
+  assert.deepStrictEqual([v3.fallback, v3.items.length, v3.total], [false, 2, 200]);
+  assert.strictEqual(v3.items.find((i) => i.id === v3.last).name, 'สบู่ก้อน');
+  L.reduce(s, main('R9', 190, 'ลบ : ' + D2), 1900);
+  assert.strictEqual(L.view(s, 2000).items.length, 1);
+}
+console.log('custdisplay-logic.test.js: duplicate-barcode case passed');

@@ -35,6 +35,24 @@ body::after{content:"";position:fixed;inset:16px;border:1px solid var(--gold);bo
 #nv{position:fixed;width:2px;height:2px;opacity:.01;left:0;top:0;pointer-events:none}
 #st{position:fixed;top:0;left:0;right:0;padding:6px;font-size:15px;background:#000;color:#ffd24a;display:none;z-index:5}
 .paidbg{background:radial-gradient(120% 90% at 50% 18%,#2fae68 0%,#12703c 60%,#0a4a28 100%)!important}
+/* จอลูกค้าแบบแสดงรายการสินค้า */
+#v.cartv{justify-content:flex-start;align-items:stretch;gap:1.2vmin;padding:24px 28px 20px}
+.cart-h{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.cart-h .shop{font-size:clamp(20px,5vmin,44px)}
+.cart-h .sub{font-size:clamp(14px,3.2vmin,26px)}
+#items.ov{-webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 22px);mask-image:linear-gradient(to bottom,transparent 0,#000 22px)}
+#items{flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;gap:6px;text-align:left}
+.it{display:flex;justify-content:space-between;align-items:center;gap:14px;background:rgba(255,255,255,.1);border-radius:14px;padding:clamp(6px,1.6vmin,14px) clamp(10px,2.4vmin,20px)}
+.it.hl{background:#fff6dc;color:var(--ink);box-shadow:0 0 0 3px var(--gold)}
+.it .nm{font-size:clamp(18px,4.4vmin,40px);font-weight:700;line-height:1.2;min-width:0}
+.it .dt{font-size:clamp(13px,2.8vmin,24px);opacity:.85;margin-top:2px}
+.it .am{font-size:clamp(20px,5vmin,44px);font-weight:800;white-space:nowrap}
+.tot{display:flex;justify-content:space-between;align-items:center;background:linear-gradient(#f7dc86,#d9a937);color:#5a0714;border-radius:18px;padding:clamp(8px,2vmin,18px) clamp(14px,3vmin,28px);box-shadow:0 4px 0 #8a6414}
+.tot b{font-size:clamp(22px,6vmin,52px)}.tot i{font-style:normal;font-size:clamp(34px,11vmin,100px);font-weight:800;line-height:1}
+.pr{display:flex;justify-content:space-between;align-items:baseline;width:min(92vw,900px);gap:16px;border-bottom:2px solid rgba(243,207,107,.35);padding:clamp(4px,1.4vmin,12px) 0}
+.pr span{font-size:clamp(22px,5.6vmin,48px)}.pr b{font-size:clamp(34px,10vmin,96px);color:var(--gold);text-shadow:0 3px 0 #5a0714}
+.pr.chg b{font-size:clamp(44px,15vmin,140px);color:#fff}
+.mc{position:fixed;left:26px;bottom:18px;font-size:13px;opacity:.55;z-index:2}
 @media (orientation:landscape) and (max-height:520px){#v{flex-direction:row;gap:24px}.mascot{--w:30vh!important}}
 </style></head><body>
 <video id="nv" muted playsinline loop></video><div id="aw">แตะหน้าจอ 1 ครั้ง เพื่อกันจอดับ (ให้รับ QR ได้ตลอด)</div><div id="st">⚠ ไม่ได้เชื่อมต่อ</div><div id="v"></div>
@@ -45,7 +63,7 @@ function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return
 function shop(){return '<div class="shop">'+esc(SHOP)+'</div>'}
 function mascot(cls,w){return '<div class="mascot '+cls+'" style="--w:'+w+'"></div>'}
 function bg(p){document.documentElement.classList.toggle('paidbg',!!p);document.body.classList.toggle('paidbg',!!p)}
-function render(m){clearInterval(timer);bg(false);if(m.shopName)SHOP=m.shopName;
+function render(m){clearInterval(timer);bg(false);v.className='';if(m.shopName)SHOP=m.shopName;
  if(m.type==='show_qr'){var q=qrcode(0,'M');q.addData(m.payload);q.make();
   v.innerHTML=shop()+'<div class="qrcard">'+q.createSvgTag({cellSize:6,margin:2,scalable:true})+'</div><div class="amt">฿ '+esc(m.amount)+'</div><div class="bar" id="bar"><i id="fill"></i></div><div class="sub">สแกนจ่ายด้วยแอปธนาคาร · เหลือเวลา <b id="t"></b> วินาที</div>'+mascot('m-wave','min(34vw,22vh)');
   var total=(m.expiresInSec||180)*1000,end=Date.now()+total;
@@ -53,7 +71,21 @@ function render(m){clearInterval(timer);bg(false);if(m.shopName)SHOP=m.shopName;
    if(e)e.textContent=Math.ceil(left/1000);if(f)f.style.width=(left/total*100)+'%';if(b)b.className='bar'+(left<30000?' low':'')};tick();timer=setInterval(tick,500)}
  else if(m.type==='paid'){bg(true);v.innerHTML='<div class="tick">✓</div><div class="big">รับเงินแล้ว</div><div class="amt">฿ '+esc(m.amount)+'</div><div class="row">'+mascot('m-thanks','min(40vw,24vh)')+'<div class="bubble">ขอบคุณที่มาอุดหนุนนะคะ</div></div>'+shop();beep();setTimeout(function(){render({type:'idle'})},5000)}
  else if(m.type==='expired'||m.type==='cancelled'){v.innerHTML=shop()+'<div class="big">'+(m.type==='expired'?'หมดเวลา':'ยกเลิกรายการ')+'</div><div class="sub">กรุณาแจ้งพนักงานเพื่อทำรายการใหม่</div>'+mascot('m-wave','min(44vw,28vh)');setTimeout(function(){render({type:'idle'})},4000)}
+ else if(m.type==='cart')renderCart(m)
+ else if(m.type==='pay')renderPay(m)
+ else if(m.type==='thanks')renderThanks(m)
  else v.innerHTML=shop()+mascot('m-wave','min(66vw,44vh)')+'<div class="bubble">ยินดีต้อนรับสู่ร้านอึ้งลักเส็งนะคะ<br>ริสุซังยินดีให้บริการค่ะ</div><div class="pill">พร้อมรับชำระ</div>'}
+function fmt(n){if(n==null||n===''||isNaN(n))return '-';return Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}
+function fq(n){n=Number(n);return n%1===0?String(n):String(+n.toFixed(3))}
+function mc(m){return m.machine?'<div class="mc">'+esc(m.machine)+'</div>':''}
+function renderCart(m){var items=m.items||[];v.className='cartv';
+ var rows=items.map(function(i){return '<div class="it'+(i.id===m.last?' hl':'')+'"><div><div class="nm">'+esc(i.name)+'</div><div class="dt">'+fq(i.qty)+' '+esc(i.unit)+' × '+fmt(i.price)+'</div></div><div class="am">'+fmt(i.amount)+'</div></div>'}).join('');
+ v.innerHTML='<div class="cart-h"><div class="shop">'+esc(SHOP)+'</div><div class="sub">'+(m.fallback?'รายการล่าสุด':'รายการสินค้า')+'</div></div><div id="items">'+rows+'</div><div class="tot"><b>ยอดรวม</b><i>฿ '+fmt(m.total)+'</i></div>'+mc(m);
+ var box=document.getElementById('items'),hl=box&&box.querySelector('.hl');
+ if(box){box.style.justifyContent='flex-start';box.scrollTop=0;
+  if(box.scrollHeight>box.clientHeight){box.classList.add('ov');var k=hl||box.lastChild;if(k)box.scrollTop=k.offsetTop+k.offsetHeight-box.clientHeight+6}}}
+function renderPay(m){v.innerHTML=shop()+'<div class="pr"><span>ยอดที่ต้องชำระ</span><b>฿ '+fmt(m.due)+'</b></div><div class="pr"><span>รับเงิน</span><b>'+(m.cash==null?'-':'฿ '+fmt(m.cash))+'</b></div><div class="pr chg"><span>เงินทอน</span><b>'+(m.change==null?'-':'฿ '+fmt(m.change))+'</b></div>'+mc(m)}
+function renderThanks(m){bg(true);v.innerHTML='<div class="tick">✓</div><div class="big">ขอบคุณครับ</div>'+(m.change>0?'<div class="pr chg"><span>เงินทอน</span><b>฿ '+fmt(m.change)+'</b></div>':'')+'<div class="row">'+mascot('m-thanks','min(34vw,20vh)')+'<div class="bubble">ขอบคุณที่มาอุดหนุนนะคะ</div></div>'+mc(m)}
 function beep(){try{var a=new (window.AudioContext||window.webkitAudioContext)(),o=a.createOscillator();o.connect(a.destination);o.frequency.value=880;o.start();o.stop(a.currentTime+.25)}catch(e){}}
 function connect(){clearTimeout(retry);if(ws){ws.onopen=ws.onmessage=ws.onclose=ws.onerror=null;try{ws.close()}catch(e){}}
  ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws');lastRx=Date.now();var me=ws;
