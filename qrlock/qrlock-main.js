@@ -12,20 +12,27 @@ const { createDisplayServer } = require('./display-server');
 const { createMatcher } = require('./matcher');
 const { runAutoType } = require('./autotype');
 const { createPhone, ADDR_RE, PKG_RE } = require('./phone');
+// จอลูกค้าแบบมีรายการสินค้า (อ่านจาก POS) — โหลดพังต้องไม่ทำให้ QR-LOCK เดิมหายไป
+let cd = null;
+try {
+  cd = { createCartState: require('../customerdisplay/cart-state').createCartState, ...require('../customerdisplay/feed'),
+    createReaderHost: require('../customerdisplay/reader-host').createReaderHost, ensureReader: require('../customerdisplay/build-reader').ensureReader,
+    migrateConfig: require('../customerdisplay/migrate').migrateConfig };
+} catch (e) { console.warn('[customerdisplay] load failed:', e && e.message); cd = null; }
 
-const DEFAULTS = { enabled: false, machineName: 'เครื่อง 1', bank: '', qrTemplate: '', shopName: '', expirySec: 180, warnAmountOver: 10000, hotkey: 'F9', transferCodes: ['02'], displayPort: 8080, autoType: { enabled: false, windowTitleContains: '', keys: [] },
-  phone: { enabled: false, adbPath: '', address: '', payPackage: '', payHotkey: 'Ctrl+F10', displayHotkey: 'Ctrl+F11', autoDisplayOnQr: false } };
+const DEFAULTS = { enabled: false, machineName: 'เครื่อง 1', bank: '', qrTemplate: '', shopName: '', expirySec: 180, warnAmountOver: 10000, hotkey: 'F9', transferCodes: ['02'], displayPort: 8790, portMigrated: false, autoType: { enabled: false, windowTitleContains: '', keys: [] },
+  phone: { enabled: false, adbPath: '', address: '', payPackage: '', payHotkey: 'Ctrl+F10', displayHotkey: 'Ctrl+F11', autoDisplayOnQr: false, autoDisplayAfterBill: false } };
 const phoneCfg = () => ({ ...DEFAULTS.phone, ...(cfg.phone || {}) });
 let phone = null, phoneKeys = [];
 let ctx = null, cfg = { ...DEFAULTS }, win = null, server = null, sessions = null, timer = null, lastMsg = { type: 'idle' }, active = false;
-let cfgPath = null, logPath = null;
+let cfgPath = null, logPath = null, feed = null, reader = null;
 
 function loadConfig() { try { return { ...DEFAULTS, ...JSON.parse(fs.readFileSync(cfgPath, 'utf8')) }; } catch (e) { return { ...DEFAULTS }; } }
 function saveConfig() { try { fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2)); } catch (e) { /* ignore */ } }
 function log(s, autoTyped) {
   try { fs.appendFileSync(logPath, JSON.stringify({ startedAt: new Date(s.startedAt).toISOString(), machine: s.machine, staff: s.staff, amount: s.amount, status: s.status, endedAt: s.endedAt ? new Date(s.endedAt).toISOString() : null, matchedText: s.matchedText || null, autoTyped: !!autoTyped }) + '\n'); } catch (e) { /* ignore */ }
 }
-function send(msg) { msg = { shopName: cfg.shopName || undefined, ...msg }; lastMsg = msg; if (server) server.broadcast(msg); }
+function send(msg) { msg = { shopName: cfg.shopName || undefined, ...msg }; lastMsg = msg; if (feed) feed.setQr(msg); else if (server) server.broadcast(msg); }
 function push(state) { if (win && !win.isDestroyed()) win.webContents.send('qrlock:state', state); }
 function hideWin() { if (win && !win.isDestroyed()) win.hide(); }
 
@@ -107,7 +114,7 @@ function openPhone() {
 }
 async function savePhone(input) {
   const p = { ...phoneCfg(), ...(input || {}) };
-  p.enabled = !!p.enabled; p.autoDisplayOnQr = !!p.autoDisplayOnQr;
+  p.enabled = !!p.enabled; p.autoDisplayOnQr = !!p.autoDisplayOnQr; p.autoDisplayAfterBill = !!p.autoDisplayAfterBill;
   p.address = String(p.address || '').trim(); p.payPackage = String(p.payPackage || '').trim();
   p.payHotkey = String(p.payHotkey || '').trim(); p.displayHotkey = String(p.displayHotkey || '').trim();
   if (p.address && !ADDR_RE.test(p.address)) return { ok: false, error: 'ที่อยู่มือถือต้องเป็นรูปแบบ IP:พอร์ต' };
@@ -124,17 +131,34 @@ async function savePhone(input) {
 async function start() {
   if (active) return;
   sessions = createSessions({ expirySec: cfg.expirySec, onChange: onSessionChange });
-  server = createDisplayServer({ port: cfg.displayPort, getLastMessage: () => lastMsg, assetsDir: __dirname });
+  feed = null; reader = null;
+  if (cd) {
+    try {
+      feed = cd.createDisplayFeed({ cart: cd.createCartState({ log: (s) => console.warn('[customerdisplay]', s) }), send: (v) => { if (server) server.broadcast(v); },
+        shopName: () => cfg.shopName || undefined,
+        onBillSaved: () => { if (phone && cd.autoReturnEnabled(phoneCfg())) phoneOpenDisplay().catch(() => {}); } });
+    } catch (e) { feed = null; console.warn('[customerdisplay] feed failed:', e && e.message); }
+  }
+  server = createDisplayServer({ port: cfg.displayPort, getLastMessage: () => (feed ? feed.current() : lastMsg), assetsDir: __dirname });
   try { await server.start(); } catch (e) { console.warn('[qrlock] display server failed:', e && e.message); server = null; }
   try { if (cfg.hotkey) globalShortcut.register(cfg.hotkey, () => { if (sessions.waiting()) showWaiting(sessions.waiting()); else showInput(); }); } catch (e) { console.warn('[qrlock] hotkey failed:', e && e.message); }
-  timer = setInterval(() => { try { sessions.tick(); } catch (e) { /* ignore */ } }, 1000);
+  timer = setInterval(() => { try { sessions.tick(); } catch (e) { /* ignore */ } try { if (feed) feed.tick(); } catch (e) { /* ignore */ } }, 1000);
   active = true;
+  if (cd && feed && server) {
+    try {
+      const src = path.join(__dirname, '..', 'customerdisplay', 'posreader.cs').replace('app.asar' + path.sep, 'app.asar.unpacked' + path.sep);
+      reader = cd.createReaderHost({ resolveExe: () => cd.ensureReader({ srcPath: src, outDir: path.join(ctx.app.getPath('userData'), 'customerdisplay') }),
+        onEvent: (e) => feed.onReaderEvent(e), onLog: (s) => console.warn('[customerdisplay]', s) });
+      reader.start().catch(() => {});
+    } catch (e) { reader = null; console.warn('[customerdisplay] reader failed:', e && e.message); }
+  }
   registerPhoneKeys();
 }
 async function stop() {
   if (!active) return;
   active = false;
   clearInterval(timer); timer = null;
+  try { if (reader) reader.stop(); } catch (e) { /* ignore */ } reader = null; feed = null;
   try { if (cfg.hotkey) globalShortcut.unregister(cfg.hotkey); } catch (e) { /* ignore */ }
   unregisterPhoneKeys();
   try { sessions.cancel(); } catch (e) { /* ignore */ }
@@ -226,7 +250,7 @@ function registerIpc() {
   ipcMain.handle('qrlock:link-info', () => ({ ips: lanIps(), port: cfg.displayPort }));
   // กฎไฟร์วอลล์ TCP ของจอลูกค้าโดยเฉพาะ (แยกจากกฎ UDP ของช่องทางรับเงินเข้า ไม่แตะของเดิม)
   ipcMain.handle('qrlock:link-firewall', () => new Promise((resolve) => {
-    const inner = "Remove-NetFirewallRule -DisplayName '" + FW_RULE + "' -ErrorAction SilentlyContinue; New-NetFirewallRule -DisplayName '" + FW_RULE + "' -Direction Inbound -Protocol TCP -LocalPort " + (parseInt(cfg.displayPort, 10) || 8080) + " -Action Allow -Profile Any | Out-Null";
+    const inner = "Remove-NetFirewallRule -DisplayName '" + FW_RULE + "' -ErrorAction SilentlyContinue; New-NetFirewallRule -DisplayName '" + FW_RULE + "' -Direction Inbound -Protocol TCP -LocalPort " + (parseInt(cfg.displayPort, 10) || 8790) + " -Action Allow -Profile Any | Out-Null";
     const enc = Buffer.from(inner, 'utf16le').toString('base64');
     execFile('powershell.exe', ['-NoProfile', '-Command', "Start-Process powershell -Verb RunAs -Wait -WindowStyle Hidden -ArgumentList '-NoProfile','-EncodedCommand','" + enc + "'"], { timeout: 120000, windowsHide: true }, (err, _o, se) => {
       if (err) resolve({ ok: false, reason: /cancel/i.test(String(se)) ? 'ยกเลิกการขอสิทธิ์ admin' : String(se || err.message).trim() });
@@ -267,6 +291,9 @@ function init(context) {
   cfgPath = path.join(ctx.app.getPath('userData'), 'qrlock-config.json');
   logPath = path.join(ctx.app.getPath('userData'), 'qrlock-log.jsonl');
   cfg = loadConfig();
+  if (cd) { // ย้ายพอร์ตเดิมไปพอร์ตใหม่ครั้งเดียว (ดู migrate.js; บันทึกเฉพาะเมื่อมีไฟล์ตั้งค่าอยู่แล้ว)
+    try { const had = fs.existsSync(cfgPath); cfg = { ...cfg, ...cd.migrateConfig(cfg) }; if (had) saveConfig(); } catch (e) { /* ignore */ }
+  }
   phone = createPhone({ dir: path.join(ctx.app.getPath('userData'), 'adb'), getCfg: phoneCfg });
   registerIpc();
   if (cfg.enabled) {

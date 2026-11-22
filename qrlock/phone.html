@@ -37,6 +37,7 @@ button.g{background:#555} #m{min-height:20px;margin-top:8px;font-weight:600;whit
 <label>เปิดแอปรับเงินบนมือถือ</label><input id="hp" class="key" readonly placeholder="คลิกแล้วกดปุ่ม">
 <label>กลับหน้าจอลูกค้า</label><input id="hd" class="key" readonly placeholder="คลิกแล้วกดปุ่ม">
 <label><input type="checkbox" id="auto" style="width:auto"> เปิดหน้าจอลูกค้าบนมือถืออัตโนมัติเมื่อกดสร้าง QR (F9)</label>
+<label><input type="checkbox" id="autoBill" style="width:auto"> กลับหน้าจอลูกค้าเองเมื่อบันทึกบิลแล้ว</label>
 
 <hr>
 <button id="sv">💾 บันทึก</button><button class="g" id="tp">ทดสอบ: เปิดแอปรับเงิน</button><button class="g" id="td">ทดสอบ: กลับหน้าจอลูกค้า</button>
@@ -44,11 +45,11 @@ button.g{background:#555} #m{min-height:20px;margin-top:8px;font-weight:600;whit
 <script>
 const $=id=>document.getElementById(id),P=window.qrlockPhone;
 const say=(t,ok)=>{$('m').className=ok===true?'ok':ok===false?'bad':'';$('m').textContent=t};
-function fields(){return{enabled:$('en').checked,address:$('ad').value.trim(),payPackage:$('pk').value,payHotkey:$('hp').value.trim(),displayHotkey:$('hd').value.trim(),autoDisplayOnQr:$('auto').checked}}
+function fields(){return{enabled:$('en').checked,address:$('ad').value.trim(),payPackage:$('pk').value,payHotkey:$('hp').value.trim(),displayHotkey:$('hd').value.trim(),autoDisplayOnQr:$('auto').checked,autoDisplayAfterBill:$('autoBill').checked}}
 async function refresh(){const s=await P.load();const c=s.cfg;
  $('adbSt').innerHTML=s.status.adb?'<span class="ok">พร้อมใช้ ✅</span>':'<span class="bad">ยังไม่มี adb</span>';
  $('devSt').textContent=s.status.devices.length?'อุปกรณ์ที่เห็น: '+s.status.devices.map(d=>d.id+' ('+d.state+')').join(', '):'ยังไม่เห็นมือถือที่เชื่อมอยู่';
- $('en').checked=!!c.enabled;$('ad').value=c.address||'';$('hp').value=c.payHotkey||'';$('hd').value=c.displayHotkey||'';$('auto').checked=!!c.autoDisplayOnQr;
+ $('en').checked=!!c.enabled;$('ad').value=c.address||'';$('hp').value=c.payHotkey||'';$('hd').value=c.displayHotkey||'';$('auto').checked=!!c.autoDisplayOnQr;$('autoBill').checked=!!c.autoDisplayAfterBill;
  if(c.payPackage){$('pk').innerHTML='<option value="'+c.payPackage+'">'+c.payPackage+'</option>'}}
 $('inst').onclick=async()=>{say('กำลังดาวน์โหลด...');try{const r=await P.install();say(r.ok?'ติดตั้ง adb แล้ว ✅':'ไม่สำเร็จ: '+r.error,r.ok);refresh()}catch(e){say('ไม่สำเร็จ: '+e.message,false)}};
 $('pair').onclick=async()=>{say('กำลังจับคู่...');const r=await P.pair($('pa').value.trim(),$('pc').value.trim());say(r.ok?'จับคู่แล้ว ✅ ต่อไปกรอกข้อ 4':'ไม่สำเร็จ: '+r.error,r.ok)};

@@ -13,7 +13,7 @@ function frame(text) {
   return Buffer.concat([h, p]);
 }
 
-function createDisplayServer({ port = 8080, heartbeatMs = 10000, getLastMessage = () => ({ type: 'idle' }), assetsDir = __dirname } = {}) {
+function createDisplayServer({ port = 8790, heartbeatMs = 10000, getLastMessage = () => ({ type: 'idle' }), assetsDir = __dirname } = {}) {
   const clients = new Set();
   let hb = null;
   const files = { '/display': ['display.html', 'text/html; charset=utf-8'], '/qrcode.js': ['vendor/qrcode.js', 'application/javascript'], '/assets/risu-sheet.jpg': ['assets/risu-sheet.jpg', 'image/jpeg'] };
