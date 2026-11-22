@@ -9,7 +9,8 @@
 
 param(
     [int]$IntervalMs = 300,
-    [switch]$Debug1
+    [switch]$Debug1,
+    [int]$ParentPid = 0   # ถ้าแอปแม่ (POS Hero) ตาย ให้จบเอง ไม่ค้างเป็นโปรเซสกำพร้า
 )
 
 $ErrorActionPreference = 'Stop'
@@ -133,6 +134,7 @@ function Read-Pay($payWin) {
 $lastMain = $null; $lastPay = $null; $payWasOpen = $false; $missingSent = $false
 
 while ($true) {
+    if ($ParentPid -gt 0 -and -not (Get-Process -Id $ParentPid -ErrorAction SilentlyContinue)) { exit }
     try {
         if (-not $script:posWin -or -not $script:elTotal) {
             if (-not (Locate-Main)) {

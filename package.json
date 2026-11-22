@@ -40,6 +40,7 @@
       "catalog/**/*",
       "fortune/**/*",
       "qrlock/**/*",
+      "custdisplay/**/*",
       "renderer/**/*",
       "build/icon.ico",
       "build/tray.png",
@@ -55,7 +56,8 @@
       "build/raw-print.ps1",
       "fortune/job-watcher.ps1",
       "fortune/spool-capture.ps1",
-      "fortune/spool-relay.ps1"
+      "fortune/spool-relay.ps1",
+      "custdisplay/pos-reader.ps1"
     ],
     "publish": {
       "provider": "github",

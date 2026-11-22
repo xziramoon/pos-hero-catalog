@@ -61,16 +61,20 @@ function createState() {
   };
 }
 
+// สินค้าบางตัวใน POS ใช้รหัสซ้ำกัน (เช่น "..") จึงใช้ barcode + ชื่อเป็นกุญแจของบรรทัด
+function idOf(p) { return p.barcode + '\u0001' + p.name; }
+
 function applyBar(st, p) {
+  const id = idOf(p);
   if (p.action === 'remove') {
-    st.items = st.items.filter((i) => i.barcode !== p.barcode);
-    if (st.last === p.barcode) st.last = st.items.length ? st.items[st.items.length - 1].barcode : null;
+    st.items = st.items.filter((i) => i.id !== id);
+    if (st.last === id) st.last = st.items.length ? st.items[st.items.length - 1].id : null;
     return;
   }
-  const rec = { barcode: p.barcode, name: p.name, unit: p.unit, qty: p.qty, price: p.price, amount: p.amount };
-  const i = st.items.findIndex((x) => x.barcode === p.barcode);
+  const rec = { id, barcode: p.barcode, name: p.name, unit: p.unit, qty: p.qty, price: p.price, amount: p.amount };
+  const i = st.items.findIndex((x) => x.id === id);
   if (i >= 0) st.items[i] = rec; else st.items.push(rec);
-  st.last = p.barcode;
+  st.last = id;
   st.fallbackItem = rec;
 }
 
@@ -162,7 +166,7 @@ function view(st, now) {
   }
   // ยอดไม่ตรง (Recall Bill / ส่วนลด / แก้ราคา / เริ่มกลางบิล): แสดงแค่รายการล่าสุด + Total จาก POS
   const only = st.fallbackItem ? [{ ...st.fallbackItem }] : [];
-  return { type: 'cart', items: only, last: st.fallbackItem ? st.fallbackItem.barcode : null, total: st.total, fallback: true };
+  return { type: 'cart', items: only, last: st.fallbackItem ? st.fallbackItem.id : null, total: st.total, fallback: true };
 }
 
 // เวลาที่ควรเรียก view() อีกครั้ง (ใช้กับ timer ของหน้าขอบคุณ) หรือ null ถ้าไม่มี
