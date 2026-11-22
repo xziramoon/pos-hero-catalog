@@ -55,3 +55,24 @@ assert.strictEqual(composeView({ type: 'show_qr', payload: 'x' }, cart).type, 's
 for (const ty of ['paid', 'expired', 'cancelled']) assert.strictEqual(composeView({ type: ty }, cart).type, ty);
 assert.strictEqual(composeView({ type: 'idle' }, cart), cart); assert.strictEqual(composeView(null, cart), cart);
 console.log('cd-cart-state: ok');
+
+// ---- ผลรีวิวรอบสุดท้าย ----
+const ev = (r, tot, line) => ({ t: 'main', machine: 'POS02', receipt: r, total: tot, line });
+const LL = (bc, q, p) => bc + '/x/ชิ้น/@ ' + q.toFixed(2) + ' x ' + p.toFixed(2) + ' = ' + (q * p).toFixed(2);
+// เงินทอนบิลก่อนต้องไม่โผล่ในบิลถัดไป (จ่ายโอน/จ่ายพอดี → เงินทอนว่าง)
+{ const { c } = mk(); c.handle(ev('R1', 0, '')); c.handle(ev('R1', 225, LL('A', 1, 225)));
+  c.handle({ t: 'pay', due: 225, cash: 500, change: 275, transfer: null }); c.handle({ t: 'pay_closed' }); c.handle(ev('R2', 0, LL('A', 1, 225)));
+  assert.strictEqual(c.view().change, 275);
+  c.handle(ev('R2', 100, LL('B', 1, 100))); c.handle({ t: 'pay', due: 100, cash: null, change: null, transfer: 100 }); c.handle({ t: 'pay_closed' }); c.handle(ev('R3', 0, LL('B', 1, 100)));
+  assert.strictEqual(c.view().type, 'thanks'); assert.strictEqual(c.view().change, null, 'change not carried over'); }
+// Total อ่านไม่ได้ (null) → ห้ามแสดงยอดเดิม/0.00: ซ่อนรายการ ไม่มี total แล้วกลับมาเมื่ออ่านได้
+{ const { c } = mk(); c.handle(ev('R1', 0, '')); c.handle(ev('R1', null, LL('A', 1, 20)));
+  let v = c.view(); assert.strictEqual(v.type, 'cart'); assert.strictEqual(v.total, null); assert.strictEqual(v.hidden, true); assert.strictEqual(v.last.barcode, 'A');
+  c.handle(ev('R1', 20, LL('A', 1, 20))); v = c.view(); assert.strictEqual(v.total, 20); assert.strictEqual(v.hidden, false);
+  c.handle(ev('R1', null, LL('A', 1, 20))); assert.strictEqual(c.view().total, null, 'stale total not kept'); }
+// ใบเสร็จเปลี่ยนตอน Pay ยังเปิด แล้วมี pay อีกอีเวนต์ → ยังต้อง billSaved ตอนปิด
+{ const { c } = mk(); c.handle(ev('R1', 0, '')); c.handle(ev('R1', 225, LL('A', 1, 225)));
+  c.handle({ t: 'pay', due: 225, cash: 500, change: 275, transfer: null }); c.handle(ev('R2', 0, LL('A', 1, 225)));
+  c.handle({ t: 'pay', due: 225, cash: 500, change: 275, transfer: null }); // ช่องเปลี่ยนตอนกำลังปิด
+  assert.strictEqual(c.handle({ t: 'pay_closed' }).billSaved, true); assert.strictEqual(c.view().type, 'thanks'); }
+console.log('cd-cart-state (review fixes): ok');

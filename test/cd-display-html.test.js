@@ -4,10 +4,10 @@ const assert = require('assert'), fs = require('fs'), path = require('path'), vm
 const { createDisplayServer } = require('../qrlock/display-server');
 const html = fs.readFileSync(path.join(__dirname, '..', 'qrlock', 'display.html'), 'utf8');
 const script = /<script>([\s\S]*)<\/script>/.exec(html)[1];
-const els = {};
+const els = {}; let timerSeq = 0; const cleared = new Set();
 const el = () => ({ style: {}, className: '', innerHTML: '', textContent: '', classList: { toggle() {} }, addEventListener() {}, play() {}, scrollIntoView() {} });
 const doc = { getElementById: (id) => els[id] || (els[id] = el()), documentElement: el(), body: el(), addEventListener() {}, createElement: () => ({ getContext: () => ({ fillRect() {} }), captureStream() {} }), hidden: false };
-const sb = { document: doc, window: { addEventListener() {} }, location: { protocol: 'http:', host: 'x' }, navigator: {}, WebSocket: class { close() {} }, setInterval: () => 0, setTimeout: () => 0, clearInterval() {}, clearTimeout() {}, qrcode() {}, Date, Math, JSON, String, Number, AudioContext: class {} };
+const sb = { document: doc, window: { addEventListener() {} }, location: { protocol: 'http:', host: 'x' }, navigator: {}, WebSocket: class { close() {} }, setInterval: () => 0, setTimeout: () => { timerSeq++; return timerSeq; }, clearInterval() {}, clearTimeout: (id) => { cleared.add(id); }, qrcode() {}, Date, Math, JSON, String, Number, AudioContext: class {} };
 vm.createContext(sb); vm.runInContext(script, sb);
 const draw = (m) => { sb.render(m); return els.v.innerHTML; };
 
@@ -28,6 +28,14 @@ h = draw({ type: 'thanks', machine: 'POS02', change: 275 }); assert.ok(h.include
 h = draw({ type: 'thanks', machine: 'POS02', change: null }); assert.ok(h.includes('ขอบคุณ') && !h.includes('เงินทอน'));
 assert.ok(draw({ type: 'idle' }).includes('ยินดีต้อนรับ'), 'welcome kept');
 assert.ok(html.includes('ไม่ได้เชื่อมต่อ'));
+
+// ผลรีวิว: Total อ่านไม่ได้ → ไม่แสดงยอดรวม (ห้ามขึ้น 0.00) แต่ยังเห็นรายการล่าสุด
+h = draw({ type: 'cart', machine: 'POS02', items: [item('A', 1, 20)], lastBarcode: 'A', total: null, hidden: true, last: item('A', 1, 20) });
+assert.ok(h.includes('สินค้าA') && !h.includes('ยอดรวม') && !h.includes('฿ 0.00') && !h.includes('NaN'), 'no total shown when unknown');
+// ผลรีวิว: ตัวจับเวลา idle ของหน้า QR (paid/expired) ต้องถูกยกเลิกเมื่อมีหน้าใหม่มาทับ ไม่งั้นจะดึงกลับหน้าต้อนรับผิดจังหวะ
+{ const before = timerSeq; sb.render({ type: 'paid', amount: '10.00' }); assert.ok(timerSeq > before, 'paid arms a timer'); const id = timerSeq;
+  sb.render({ type: 'cart', machine: 'POS02', items: [], total: 5, hidden: false, last: null }); assert.ok(cleared.has(id), 'paid timer cleared by next render'); }
+{ sb.render({ type: 'expired' }); const id = timerSeq; sb.render({ type: 'thanks', machine: 'POS02', change: null }); assert.ok(cleared.has(id), 'expired timer cleared'); }
 
 // server ส่งข้อความล่าสุดชนิดใหม่ให้ client ที่เพิ่งต่อ
 (async () => {

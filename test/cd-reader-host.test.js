@@ -46,3 +46,22 @@ function fakeSpawner() {
   }
   console.log('cd-reader-host: ok');
 })().catch((e) => { console.error(e); process.exit(1); });
+
+// ---- ผลรีวิวรอบสุดท้าย ----
+(async () => {
+  // ซ่อนหน้าต่างคอนโซลบนเครื่อง POS + ไม่ปล่อย stderr ค้างท่อ (เต็มแล้ว posreader จะค้าง)
+  { let opts = null; const spawn = (cmd, args, o) => { opts = o; const c = new EventEmitter(); c.stdout = new PassThrough(); c.kill = () => {}; return c; };
+    const h = createReaderHost({ spawn, resolveExe: async () => 'x.exe', onEvent: () => {} }); await h.start(); h.stop();
+    assert.ok(opts && opts.windowsHide === true, 'windowsHide'); assert.ok(Array.isArray(opts.stdio) && opts.stdio[2] === 'ignore', 'stderr ignored'); }
+  // ตัวอ่านตาย → จอต้องไม่ค้างบิลเดิม: ส่ง pos_missing ให้ state machine
+  { const { spawn, children } = fakeSpawner(); const evts = [];
+    const h = createReaderHost({ spawn, resolveExe: async () => 'x.exe', onEvent: (e) => evts.push(e.t), restartMs: 1000 }); await h.start();
+    children[0].emit('exit', 1); await sleep(10); h.stop();
+    assert.deepStrictEqual(evts, ['pos_missing']); }
+  // หา exe ไม่เจอครั้งแรก (เช่นโดนไวรัสสแกน) ต้องลองใหม่ ไม่ใช่เงียบตลอดไป
+  { const { spawn, children } = fakeSpawner(); let n = 0, logs = 0;
+    const h = createReaderHost({ spawn, resolveExe: async () => (++n === 1 ? null : 'x.exe'), onEvent: () => {}, onLog: () => { logs++; }, restartMs: 10 });
+    await h.start(); await sleep(80); h.stop();
+    assert.strictEqual(children.length, 1, 'retried and spawned'); assert.strictEqual(logs, 1); }
+  console.log('cd-reader-host (review fixes): ok');
+})().catch((e) => { console.error(e); process.exit(1); });

@@ -24,9 +24,10 @@ function createCartState({ now = () => Date.now(), thanksMs = 8000, log = () => 
   function handle(e) {
     const out = { billSaved: false };
     if (!e || typeof e !== 'object') return out;
-    if (e.t === 'pos_missing') { reset(); receipt = baseline = prevLine = null; total = 0; payOpen = false; pay = null; awaitingSave = savedWhilePay = false; thanksAt = null; return out; }
+    if (e.t === 'pos_missing') { reset(); receipt = baseline = prevLine = null; total = 0; payOpen = false; pay = null; awaitingSave = savedWhilePay = false; thanksAt = null; lastChange = null; return out; }
     if (e.t === 'pay') {
-      payOpen = true; savedWhilePay = false; awaitingSave = false;
+      if (!payOpen) { savedWhilePay = false; awaitingSave = false; lastChange = null; } // เริ่มจ่ายใหม่เท่านั้น (อีเวนต์ pay ซ้ำตอนกำลังปิดต้องไม่ล้างธง)
+      payOpen = true;
       pay = { due: e.due, cash: e.cash, change: e.change, transfer: e.transfer };
       if (e.change != null) lastChange = e.change;
       return out;
@@ -47,7 +48,7 @@ function createCartState({ now = () => Date.now(), thanksMs = 8000, log = () => 
       return out;
     }
     awaitingSave = false;
-    if (e.total != null) total = e.total;
+    total = e.total == null ? null : e.total; // อ่านไม่ได้ = ไม่รู้ ห้ามคงยอดเก่า
     if (e.line !== prevLine) { prevLine = e.line; if (e.line !== baseline) apply(parseLine(e.line)); }
     return out;
   }
@@ -62,7 +63,7 @@ function createCartState({ now = () => Date.now(), thanksMs = 8000, log = () => 
     if (!list.length && !total) return { type: 'idle' };
     const last = lastBarcode ? items.get(lastBarcode) || null : (list[list.length - 1] || null);
     const sum = list.reduce((s, i) => s + i.amount, 0);
-    const hidden = list.length > 0 && Math.abs(sum - total) > TOLERANCE;
+    const hidden = list.length > 0 && (total == null || Math.abs(sum - total) > TOLERANCE);
     if (hidden && !mismatchLogged) log('cart/total mismatch: sum=' + sum.toFixed(2) + ' total=' + total);
     mismatchLogged = hidden;
     return { type: 'cart', machine, items: list, lastBarcode, total, hidden, last };
