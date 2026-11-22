@@ -25,3 +25,16 @@ if (process.platform !== 'win32' || !findCsc()) { console.log('cd-build-reader: 
   assert.ok(lines.length >= 1 && lines.every((l) => ['pos_missing', 'main', 'pay', 'pay_closed'].includes(l.t)), out.s);
   console.log('cd-build-reader: ok (' + lines.map((l) => l.t).join(',') + ')');
 })().catch((e) => { console.error(e); process.exit(1); });
+
+// คอมไพล์ล้มเหลวชั่วคราว (ไฟล์ถูกล็อก/สแกนไวรัส) ต้องลองใหม่ได้ ไม่ใช่ยอมแพ้ตั้งแต่ครั้งแรก
+(async () => {
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cd-retry-'));
+  const src = path.join(__dirname, '..', 'customerdisplay', 'posreader.cs');
+  let calls = 0; const real = require('child_process').execFile;
+  const flaky = (bin, args, opts, cb) => { calls++; if (calls === 1) return cb(new Error('CS1569 locked')); return real(bin, args, opts, cb); };
+  const exe = await ensureReader({ srcPath: src, outDir, exec: flaky, retryMs: 10 });
+  assert.ok(exe && fs.existsSync(exe), 'built after one transient failure'); assert.strictEqual(calls, 2);
+  const always = (bin, args, opts, cb) => cb(new Error('nope'));
+  assert.strictEqual(await ensureReader({ srcPath: src, outDir: path.join(outDir, 'z'), exec: always, retryMs: 10 }), null, 'gives up after retries');
+  console.log('cd-build-reader retry: ok');
+})().catch((e) => { console.error(e); process.exit(1); });
