@@ -116,3 +116,19 @@ L.reduce(st, { t: 'pos_missing' }, t + 2000);
 assert.deepStrictEqual(L.view(st, t + 2000), { type: 'idle' });
 
 console.log('custdisplay-logic.test.js: all passed');
+
+// ---- จาก log จริงบน POS04 (14:33): บิลถูกเคลียร์ (line ว่าง total ว่าง) แล้วยิงสินค้าคนละชนิด ----
+{
+  const A = '8851989036274/ไฟน์ไลน์ ปรับผ้านุ่มสีขาว 1300มล./ถุง/@ 7.00 x 39.00 = 273.00';
+  const B = '8809382884275/เคียวร์ซิส แผ่นดูดซับสิว ทีทรีอยล์ 18ชิ้น/ซอง/@ 1.00 x 99.00 = 99.00';
+  const s = L.createState();
+  L.reduce(s, main('POS04261122-00001', 0, A), 1000);
+  L.reduce(s, main('POS04261122-00001', 273, A), 1300); // ข้อความเท่า baseline แต่ยอดขยับ → นับ
+  assert.strictEqual(L.view(s, 1400).items.length, 1);
+  L.reduce(s, { t: 'main', receipt: 'POS04261122-00001', total: null, line: '' }, 1600);
+  assert.deepStrictEqual(L.view(s, 1700), { type: 'idle' });
+  L.reduce(s, main('POS04261122-00001', 99, B), 1900);
+  const v2 = L.view(s, 2000);
+  assert.deepStrictEqual([v2.fallback, v2.items.length, v2.total], [false, 1, 99]);
+}
+console.log('custdisplay-logic.test.js: real-log case passed');

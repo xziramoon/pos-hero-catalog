@@ -1,4 +1,4 @@
-# อ่านหน้าจอ Sea & Hill POS ด้วย UI Automation (อ่านอย่างเดียว: ห้ามส่งคีย์ ห้ามคลิก ห้ามแก้ไฟล์/registry ของ POS)
+﻿# อ่านหน้าจอ Sea & Hill POS ด้วย UI Automation (อ่านอย่างเดียว: ห้ามส่งคีย์ ห้ามคลิก ห้ามแก้ไฟล์/registry ของ POS)
 # พิมพ์ JSON 1 บรรทัดต่อ stdout เฉพาะตอนค่าเปลี่ยน (UTF-8):
 #   {"t":"main","receipt":"POS02261122-00070","total":225.00,"line":"..."}
 #   {"t":"pay","due":225.00,"cash":500,"change":275.00,"transfer":null}
@@ -35,12 +35,11 @@ function Find-PosWindow {
     return $null
 }
 
-function Find-PayWindow([int]$pid1) {
-    $kids = $AE::RootElement.FindAll($TS::Children, $Cond::TrueCondition)
-    foreach ($w in $kids) {
-        try { if ($w.Current.ProcessId -eq $pid1 -and $w.Current.Name -eq 'Pay') { return $w } } catch {}
-    }
-    return $null
+# หน้าต่าง Pay เป็นลูกตรงของหน้าต่างหลัก POS ใน UIA tree (ไม่ใช่ top-level ใต้ Desktop) ยืนยันกับ POS จริงแล้ว
+$script:payCond = New-Object System.Windows.Automation.PropertyCondition($P::NameProperty, 'Pay')
+function Find-PayWindow($mainWin) {
+    if (-not $mainWin) { return $null }
+    return $mainWin.FindFirst($TS::Children, $script:payCond)
 }
 
 function Statics($root) {
@@ -119,7 +118,7 @@ function Read-Pay($payWin) {
         foreach ($ed in $edits) {
             $er = $ed.Current.BoundingRectangle
             $cy = $er.Top + $er.Height / 2
-            if ($cy -ge $r.Top -and $cy -le $r.Bottom -and $er.Left -ge $r.Right) {
+            if ($cy -ge $r.Top -and $cy -le $r.Bottom -and $er.Left -ge ($r.Right - 6)) {  # เผื่อ 6px: ช่อง "เงินโอน" เริ่มก่อนขอบป้าย 2px
                 $dx = $er.Left - $r.Right
                 if ($dx -lt $bestDx) { $bestDx = $dx; $best = $ed }
             }
@@ -148,7 +147,7 @@ while ($true) {
         $key = "$($m.receipt)|$($m.total)|$($m.line)"
         if ($key -ne $lastMain) { $lastMain = $key; Emit $m }
 
-        $pw = Find-PayWindow $script:posPid
+        $pw = Find-PayWindow $script:posWin
         if ($pw) {
             $pay = Read-Pay $pw
             $pk = "$($pay.due)|$($pay.cash)|$($pay.change)|$($pay.transfer)"

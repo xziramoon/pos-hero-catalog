@@ -120,6 +120,7 @@ function reduce(st, ev, now) {
 
   // ใบเสร็จเดิม: มีความเคลื่อนไหวหลัง Cancel แปลว่าไม่ใช่การบันทึกบิล
   st.payClosedAt = null;
+  if (total === 0 && st.items.length) { st.items = []; st.last = null; st.fallbackItem = null; } // POS เคลียร์บิล (Total 0/ว่าง)
   const totalChanged = total !== st.total;
   st.total = total;
 
