@@ -38,3 +38,14 @@ if (process.platform !== 'win32' || !findCsc()) { console.log('cd-build-reader: 
   assert.strictEqual(await ensureReader({ srcPath: src, outDir: path.join(outDir, 'z'), exec: always, retryMs: 10 }), null, 'gives up after retries');
   console.log('cd-build-reader retry: ok');
 })().catch((e) => { console.error(e); process.exit(1); });
+
+// พาธที่มี / ปนกับ \ (csc อ่านผิด) ต้องยังคอมไพล์ได้
+(async () => {
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cd-slash-'));
+  const BS = String.fromCharCode(92);
+  const mixed = path.join(__dirname, '..', 'customerdisplay') + '/posreader.cs'; // โฟลเดอร์ใช้ \ ท้ายพาธใช้ /
+  assert.ok(mixed.includes('/') && mixed.includes(BS));
+  const exe = await ensureReader({ srcPath: mixed, outDir: outDir + '/sub', retryMs: 10 });
+  assert.ok(exe && fs.existsSync(exe), 'builds with forward-slash paths');
+  console.log('cd-build-reader slash: ok');
+})().catch((e) => { console.error(e); process.exit(1); });

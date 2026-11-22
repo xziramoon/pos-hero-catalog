@@ -13,6 +13,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // คอมไพล์อาจล้มเหลวชั่วคราว (ไฟล์ .exe ถูกล็อกโดยโปรแกรมสแกนไวรัส) จึงลองซ้ำได้ — ไม่ throw คืน null ถ้าไม่สำเร็จ
 async function ensureReader({ srcPath, outDir, exec = execFile, retryMs = 500, attempts = 3 }) {
   try {
+    srcPath = path.resolve(srcPath); outDir = path.resolve(outDir); // csc อ่านพาธที่มี / ปนกับ  ผิด
     const csc = findCsc();
     if (!csc || !fs.existsSync(srcPath)) return null;
     const hash = crypto.createHash('sha1').update(fs.readFileSync(srcPath)).digest('hex');
