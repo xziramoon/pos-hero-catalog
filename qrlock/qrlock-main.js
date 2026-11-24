@@ -26,6 +26,15 @@ function saveConfig() { try { fs.writeFileSync(cfgPath, JSON.stringify(cfg, null
 function log(s, autoTyped) {
   try { fs.appendFileSync(logPath, JSON.stringify({ startedAt: new Date(s.startedAt).toISOString(), machine: s.machine, staff: s.staff, amount: s.amount, status: s.status, endedAt: s.endedAt ? new Date(s.endedAt).toISOString() : null, matchedText: s.matchedText || null, autoTyped: !!autoTyped }) + '\n'); } catch (e) { /* ignore */ }
 }
+// บันทึกเหตุผลที่แจ้งเตือนเงินเข้าจับคู่/ไม่จับคู่กับ QR (ไว้ไล่ปัญหา ไม่มีข้อมูลลับ ตัดข้อความ 80 ตัวอักษร)
+function matchLog(rec) {
+  if (!rec || !ctx) return;
+  try {
+    const f = path.join(ctx.app.getPath('userData'), 'qrlock-match.jsonl');
+    try { if (fs.statSync(f).size > 512 * 1024) fs.writeFileSync(f, ''); } catch (e) { /* ยังไม่มีไฟล์ */ }
+    fs.appendFileSync(f, JSON.stringify(rec) + '\n');
+  } catch (e) { /* ignore */ }
+}
 function send(msg) { msg = { shopName: cfg.shopName || undefined, ...msg }; lastMsg = msg; if (server) server.broadcast(msg); }
 
 // ---- จอลูกค้าแบบแสดงรายการสินค้า (โมดูล custdisplay) ใช้เซิร์ฟเวอร์จอเดียวกัน ----
@@ -243,13 +252,16 @@ const matcher = createMatcher({ getBank: () => cfg.bank });
 function registerIpc() {
   // แจ้งเตือนเงินเข้า (หลังกันซ้ำของ POS Hero แล้ว) → จับคู่กับ QR ที่รออยู่ ถ้าไม่ตรง/ไม่มี QR ไม่ทำอะไรเลย
   ipcMain.on('qrlock:payment', (_e, evt) => {
+    let rec = null;
     try {
       if (!active || !evt || !sessions) return;
       const w = sessions.waiting();
-      if (!w) return;
+      rec = { ts: new Date().toISOString(), amount: evt.amount, text: String(evt.text || '').slice(0, 80), waiting: w ? { amount: w.amount, startedAt: new Date(w.startedAt).toISOString() } : null, evtTs: new Date(Number(evt.ts) || Date.now()).toISOString() };
+      if (!w) { rec.result = 'no-waiting-session'; return; }
       const r = matcher({ amount: evt.amount, text: String(evt.text || '').slice(0, 300), ts: Number(evt.ts) || Date.now(), id: evt.id }, w);
+      rec.result = r.ok ? 'matched' : r.reason;
       if (r.ok) sessions.markPaid(String(evt.text || '').trim().slice(0, 200));
-    } catch (e) { /* ignore */ }
+    } catch (e) { if (rec) rec.result = 'error: ' + e.message; } finally { matchLog(rec); }
   });
   ipcMain.handle('qrlock:log-today', () => {
     try {
