@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <title>slip</title>
+<link rel="stylesheet" href="fonts/fonts.css">
 <style>
   html, body { margin: 0; padding: 0; background: #fff; }
   body { width: 576px; color: #000; font-family: 'Sarabun', 'Leelawadee UI', 'Leelawadee', 'Tahoma', sans-serif; font-weight: 700; }
@@ -39,6 +40,29 @@
   .kr .ft { text-align: center; font-size: 19px; margin-top: 10px; line-height: 1.4; }
   .kr.nopoem .hd { margin-bottom: 8px; }
 
+
+  /* ---------- ไพ่ทำนายประจำบิล (ขาวดำ 1-bit: เส้น ≥ 2px ตัวอักษร ≥ 14px) ---------- */
+  .tr { padding: 12px 24px 14px; text-align: left; font-family: 'Sarabun', 'Leelawadee UI', 'Leelawadee', 'Tahoma', sans-serif; }
+  .tr .cut { display: flex; align-items: center; gap: 10px; font-size: 15px; letter-spacing: 2px; margin-bottom: 12px; }
+  .tr .cut i { flex: 1; border-top: 3px dashed #000; }
+  .tr .cut span { font-family: 'Microsoft YaHei', 'Noto Sans CJK SC', 'Sarabun', sans-serif; }
+  .tr .row { display: flex; gap: 18px; align-items: stretch; }
+  .tr .card { width: 150px; height: 256px; flex: none; box-sizing: border-box; border: 3px solid #000; border-radius: 8px; padding: 4px; background: #fff; font-family: 'Cinzel', serif; }
+  .tr .card .in { height: 100%; box-sizing: border-box; border: 2px solid #000; border-radius: 4px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 6px 4px; }
+  .tr .rom { display: flex; align-items: center; gap: 7px; height: 22px; font-weight: 700; font-size: 18px; line-height: 22px; letter-spacing: 1px; }
+  .tr .rom b { width: 6px; height: 6px; background: #000; transform: rotate(45deg); }
+  .tr .art { width: 104px; height: 146px; line-height: 0; }
+  .tr .en { height: 32px; display: flex; align-items: center; justify-content: center; text-align: center; font-weight: 700; line-height: 15px; letter-spacing: 0.5px; white-space: pre-line; }
+  .tr .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 8px; }
+  .tr .lead { font-size: 15px; font-weight: 700; }
+  .tr .nm { font-family: 'Chonburi', 'Sarabun', 'Leelawadee UI', serif; font-weight: 400; font-size: 38px; line-height: 1.2; }
+  .tr .nm.long { font-size: 32px; }
+  .tr .kw { align-self: flex-start; background: #000; color: #fff; font-size: 16px; font-weight: 700; padding: 2px 10px; border-radius: 4px; }
+  .tr .q { font-size: 20px; font-weight: 700; line-height: 1.4; }
+  .tr .lk { font-size: 16px; line-height: 1.4; font-weight: 700; }
+  .tr .lk b { font-weight: 700; border-bottom: 2px solid #000; }
+  .tr .ft { margin-top: 12px; border-top: 2px solid #000; padding-top: 8px; display: flex; justify-content: space-between; gap: 12px; font-size: 15px; font-weight: 700; }
+
   /* ---------- คูปองส่วนลด ---------- */
   .cp { padding: 6px 18px 14px; text-align: center; }
   .cp .cut { border-top: 3px dashed #000; margin: 4px 0 10px; }
@@ -55,6 +79,7 @@
 <body>
 <div id="slip"></div>
 <script src="code128.js"></script>
+<script src="tarot-cards.js"></script>
 <script>
   var KRATHONG_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 100" width="120" height="100"><g fill="#fff" stroke="#000" stroke-width="3" stroke-linejoin="round" stroke-linecap="round">' +
     '<path d="M16 66 L26 44 L36 66Z"/><path d="M34 66 L44 44 L54 66Z"/><path d="M50 66 L60 44 L70 66Z"/><path d="M66 66 L76 44 L86 66Z"/><path d="M84 66 L94 44 L104 66Z"/>' +
@@ -102,11 +127,30 @@
     return '<div class="kr' + (poem ? '' : ' nopoem') + '">' + html + '</div>';
   }
 
+
+  // ไพ่ทำนายประจำบิล (แบบ A: รูปไพ่ข้างข้อความ) — slip.tarot = ข้อมูลจาก tarot-data.json
+  function renderTarot(slip, opts) {
+    var t = slip.tarot, art = (window.TAROT_SVGS && window.TAROT_SVGS[t.n]) || { svg: '', label: '' };
+    var foot = String(opts.footer || '').split('|').map(function (l) { return l.trim(); }).filter(Boolean);
+    var html = '<div class="cut"><i></i><span>✦ 黄六盛 TAROT ✦</span><i></i></div>';
+    html += '<div class="row"><div class="card"><div class="in">' +
+      '<div class="rom"><b></b><span>' + esc(t.roman) + '</span><b></b></div>' +
+      '<div class="art" role="img" aria-label="' + esc(art.label) + '">' + art.svg + '</div>' +
+      '<div class="en" style="font-size:' + (t.enSize || 13) + 'px">' + esc(t.en) + '</div></div></div>';
+    html += '<div class="txt"><div class="lead">ไพ่ประจำบิลของคุณ</div>' +
+      '<div class="nm' + (t.th.length > 9 ? ' long' : '') + '">' + esc(t.th) + '</div>' +
+      '<div class="kw">' + esc(t.key) + '</div>' +
+      '<div class="q">“' + esc(t.quote) + '”</div>' +
+      '<div class="lk">เลขนำโชค <b>' + esc(t.lucky) + '</b> &nbsp; สีมงคล <b>' + esc(t.color) + '</b></div></div></div>';
+    if (foot.length) html += '<div class="ft">' + foot.map(function (l) { return '<span>' + esc(l) + '</span>'; }).join('') + '</div>';
+    return '<div class="tr">' + html + '</div>';
+  }
+
   // slip = { n, label, zh:[4], th:[4], meaning, money }
-  // opts = { theme: 'newyear' | 'krathong', showZh, showTh, footer }  — คืนความสูง (px) ของใบเซียมซี
+  // opts = { theme: 'newyear' | 'krathong' | 'tarot', showZh, showTh, footer }  — คืนความสูง (px) ของใบเซียมซี
   window.renderSlip = function (slip, opts) {
     var el = document.getElementById('slip');
-    el.innerHTML = opts.theme === 'krathong' ? renderKrathong(slip, opts) : renderNewYear(slip, opts);
+    el.innerHTML = opts.theme === 'tarot' && slip.tarot ? renderTarot(slip, opts) : opts.theme === 'krathong' ? renderKrathong(slip, opts) : renderNewYear(slip, opts);
     return Math.ceil(el.getBoundingClientRect().height);
   };
 

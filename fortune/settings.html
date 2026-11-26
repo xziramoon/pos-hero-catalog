@@ -53,6 +53,7 @@
       <option value="auto">อัตโนมัติ (ลอยกระทงในช่วงวันที่ด้านล่าง นอกช่วงเป็นปีใหม่)</option>
       <option value="newyear">ปีใหม่เสมอ</option>
       <option value="krathong">ลอยกระทงเสมอ</option>
+      <option value="tarot">ไพ่ทำนายประจำบิล (22 ใบ)</option>
     </select></div>
   <div class="row"><span class="lbl">ช่วงวันที่แบบลอยกระทง (เมื่อเลือกอัตโนมัติ)</span>
     <div class="dates"><input type="date" id="krathongStart"><input type="date" id="krathongEnd"></div>
@@ -60,6 +61,8 @@
   <div class="row"><span class="lbl">ข้อความท้ายใบ (แบบปีใหม่)</span><input type="text" id="footer"></div>
   <div class="row"><span class="lbl">ข้อความท้ายใบ (แบบลอยกระทง)</span><input type="text" id="footerKrathong">
     <div class="hint">ใช้ | แทนการขึ้นบรรทัดใหม่</div></div>
+  <div class="row"><span class="lbl">ข้อความท้ายใบ (แบบไพ่ทำนาย)</span><input type="text" id="footerTarot">
+    <div class="hint">ใช้ | แยกซ้าย|ขวา (ตัวอักษรไม่เล็กกว่า 14 px)</div></div>
 </div>
 
 <div class="box">
@@ -98,7 +101,7 @@
 <script>
   const $ = (id) => document.getElementById(id);
   const bools = ['skipUnlucky', 'showZh', 'showTh', 'cutOthers', 'couponEnabled', 'billReadEnabled'];
-  const texts = ['mode', 'docFilter', 'startDate', 'endDate', 'footer', 'theme', 'krathongStart', 'krathongEnd', 'footerKrathong', 'couponPrefix', 'couponValidDays'];
+  const texts = ['mode', 'docFilter', 'startDate', 'endDate', 'footer', 'theme', 'krathongStart', 'krathongEnd', 'footerKrathong', 'footerTarot', 'couponPrefix', 'couponValidDays'];
   const tiersToText = (t) => (t || []).map((x) => x.min + ':' + x.percent).join('; ');
   const textToTiers = (s) => String(s || '').split(/[;\n]/).map((p) => p.trim().split(':')).filter((a) => a.length === 2)
     .map((a) => ({ min: Number(a[0].replace(/[^0-9.]/g, '')), percent: Number(a[1].replace(/[^0-9.]/g, '')) }));

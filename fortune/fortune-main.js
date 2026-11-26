@@ -146,7 +146,7 @@ async function handleBatch(evts) {
     try {
       const parts = [];
       const picked = [];
-      for (let i = 0; i < slipCount; i++) { const idx = logic.pickIndex(FORTUNES, settings); picked.push(idx + 1); parts.push(await getSlipBytes(idx)); }
+      for (let i = 0; i < slipCount; i++) { const idx = logic.pickIndex(currentDeck(), settings); picked.push(idx + 1); parts.push(await getSlipBytes(idx)); }
       // คูปองต่อท้ายเซียมซีก่อนคำสั่งตัด (หนึ่งชุด = หนึ่งคูปอง) พลาดตรงไหน = พิมพ์เซียมซีเดิม ใบเสร็จต้องถูกตัดเสมอ
       let minted = [];
       try { minted = await buildCoupons(Math.max(1, slipCount)); for (const m of minted) parts.push(m.buf); } catch (e) { minted = []; log(`# coupon skipped: ${e && e.message}`); }
@@ -392,6 +392,9 @@ function stopWatcher(final = true) {
   if (final && heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null; }
 }
 
+// ชุดไพ่ที่ใช้ตอนนี้ตามธีม (tarot = 22 ใบ, อื่นๆ = เซียมซี 100 ใบ) — แคชต้องสร้างจากชุดเดียวกัน (cacheKey มีธีมอยู่แล้ว)
+function currentDeck() { return logic.deckFor(logic.renderOptions(settings).theme, FORTUNES); }
+
 // ---------- เรนเดอร์แคช ----------
 async function rebuildCache() {
   const token = ++renderToken;
@@ -402,7 +405,7 @@ async function rebuildCache() {
   onChange();
   try {
     const result = await slipRenderer.renderAll(
-      FORTUNES,
+      logic.deckFor(cacheOpts.theme, FORTUNES),
       cacheOpts,
       ctx.buildRaster,
       () => token !== renderToken
@@ -438,7 +441,7 @@ async function getSlipBytes(idx) {
   if (cache && cache[idx]) return cache[idx];
   log(`# cache not ready → render slip #${idx + 1} on demand`);
   if (!rendering && settings.mode === 'on') rebuildCache().catch(() => {});
-  return withTimeout(slipRenderer.renderSingle(FORTUNES[idx], logic.renderOptions(settings), ctx.buildRaster), 10000, 'render slip');
+  return withTimeout(slipRenderer.renderSingle(currentDeck()[idx], logic.renderOptions(settings), ctx.buildRaster), 10000, 'render slip');
 }
 
 function applySettings(next) {
@@ -457,8 +460,8 @@ function applySettings(next) {
 }
 
 async function testPrint() {
-  const idx = logic.pickIndex(FORTUNES, settings);
-  const bytes = cache && cache[idx] ? cache[idx] : await withTimeout(slipRenderer.renderSingle(FORTUNES[idx], logic.renderOptions(settings), ctx.buildRaster), 10000, 'render slip');
+  const idx = logic.pickIndex(currentDeck(), settings);
+  const bytes = cache && cache[idx] ? cache[idx] : await withTimeout(slipRenderer.renderSingle(currentDeck()[idx], logic.renderOptions(settings), ctx.buildRaster), 10000, 'render slip');
   await sendBytes(Buffer.concat([bytes, logic.FEED_AND_CUT]));
   return { success: true, n: idx + 1 };
 }

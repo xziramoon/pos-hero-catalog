@@ -19,10 +19,11 @@ const DEFAULT_SETTINGS = Object.freeze({
   endDate: '',
   cutOthers: true,         // งานอื่นที่จบ → ส่งคำสั่งตัดกระดาษให้ (เพราะไดรเวอร์ตั้ง No Cut)
   footer: 'สวัสดีปีใหม่ 2570 · อึ้งลักเส็ง 黄六盛',
-  theme: 'auto',           // 'auto' = ลอยกระทงในช่วงวันที่ด้านล่าง นอกช่วงเป็นปีใหม่ | 'newyear' | 'krathong'
+  theme: 'auto',           // 'auto' = ลอยกระทงในช่วงวันที่ด้านล่าง นอกช่วงเป็นปีใหม่ | 'newyear' | 'krathong' | 'tarot' (ไพ่ทำนาย 22 ใบ)
   krathongStart: '2026-11-22', // ช่วงวันที่ใช้แบบลอยกระทงเมื่อ theme = auto (รวมวันเริ่ม/วันจบ) — ตรวจปฏิทินแล้วแก้ในหน้าตั้งค่า
   krathongEnd: '2026-11-26',
   footerKrathong: '～ สุขสันต์วันลอยกระทง ～|อึ้งลักเส็ง 黄六盛', // | = ขึ้นบรรทัดใหม่
+  footerTarot: 'ขอให้โชคดีทุกวัน|อึ้งลักเส็ง 黄六盛', // ท้ายใบแบบไพ่ทำนาย (| = แยกซ้าย|ขวา)
   couponEnabled: false,    // คูปองส่วนลดตามยอดต่อท้ายเซียมซี (แคชเชียร์กรอกยอดที่หน้าต่าง "ยอดบิล") — ปิดเป็นค่าเริ่มต้น
   couponTiers: [{ min: 500, percent: 5 }, { min: 1000, percent: 10 }], // [{min: ยอดขั้นต่ำ, percent: ส่วนลด%}] ตัวอย่างตั้งต้น แก้ในหน้าตั้งค่า
   couponValidDays: 30,     // อายุคูปอง (วัน) หมดอายุสิ้นวัน
@@ -34,9 +35,9 @@ const DEFAULT_SETTINGS = Object.freeze({
 function normalizeSettings(raw) {
   const s = Object.assign({}, DEFAULT_SETTINGS, raw && typeof raw === 'object' ? raw : {});
   if (!['off', 'record', 'on'].includes(s.mode)) s.mode = 'off';
-  if (!['auto', 'newyear', 'krathong'].includes(s.theme)) s.theme = 'auto';
+  if (!['auto', 'newyear', 'krathong', 'tarot'].includes(s.theme)) s.theme = 'auto';
   for (const k of ['skipUnlucky', 'showZh', 'showTh', 'cutOthers']) s[k] = !!s[k];
-  for (const k of ['printerName', 'docFilter', 'footer', 'footerKrathong']) s[k] = typeof s[k] === 'string' ? s[k].trim() : DEFAULT_SETTINGS[k];
+  for (const k of ['printerName', 'docFilter', 'footer', 'footerKrathong', 'footerTarot']) s[k] = typeof s[k] === 'string' ? s[k].trim() : DEFAULT_SETTINGS[k];
   for (const k of ['startDate', 'endDate', 'krathongStart', 'krathongEnd']) s[k] = /^\d{4}-\d{2}-\d{2}$/.test(s[k]) ? s[k] : '';
   s.couponEnabled = !!s.couponEnabled && !!coupon; // คูปองโหลดไม่ได้ = ปิด (เซียมซี/การตัดกระดาษทำงานต่อ)
   s.couponTiers = coupon ? coupon.normalizeTiers(s.couponTiers) : [];
@@ -61,7 +62,7 @@ function inDateRange(settings, now = new Date()) {
 
 // ธีมที่ใช้อยู่ตอนนี้ ('newyear' | 'krathong')
 function activeTheme(settings, now = new Date()) {
-  if (settings.theme === 'newyear' || settings.theme === 'krathong') return settings.theme;
+  if (settings.theme === 'newyear' || settings.theme === 'krathong' || settings.theme === 'tarot') return settings.theme;
   if (!settings.krathongStart || !settings.krathongEnd) return 'newyear';
   const today = localDateStr(now);
   return today >= settings.krathongStart && today <= settings.krathongEnd ? 'krathong' : 'newyear';
@@ -70,7 +71,14 @@ function activeTheme(settings, now = new Date()) {
 // ตัวเลือกการเรนเดอร์ใบเซียมซี — ถ้าค่านี้เปลี่ยน ต้องเรนเดอร์แคชใหม่
 function renderOptions(settings, now = new Date()) {
   const theme = activeTheme(settings, now);
-  return { theme, showZh: !!settings.showZh, showTh: !!settings.showTh, footer: theme === 'krathong' ? settings.footerKrathong : settings.footer };
+  return { theme, showZh: !!settings.showZh, showTh: !!settings.showTh, footer: theme === 'krathong' ? settings.footerKrathong : theme === 'tarot' ? settings.footerTarot : settings.footer };
+}
+
+// ไพ่ทำนาย 22 ใบ: รูปแบบเดียวกับใบเซียมซี (n = 1..22, level 上签 เพื่อให้ผ่านตัวกรองใบโชคร้าย) ข้อมูลจริงอยู่ใน slip.tarot
+const TAROT_DECK = require('./tarot-data.json').map((c, i) => ({ n: i + 1, level: '上签', tarot: c }));
+// ชุดที่ใช้สุ่ม/เรนเดอร์ตามธีม: tarot → ไพ่ 22 ใบ, อื่นๆ → เซียมซี 100 ใบ
+function deckFor(theme, fortunes) {
+  return theme === 'tarot' ? TAROT_DECK : fortunes;
 }
 
 function matchesReceipt(docName, filter) {
@@ -212,7 +220,7 @@ function buildReportText(lines, meta = {}) {
 }
 
 module.exports = {
-  buildReportText, makeBatcher, activeTheme, renderOptions,
+  buildReportText, makeBatcher, activeTheme, renderOptions, deckFor, TAROT_DECK,
   OWN_DOC_NAME, DEFAULT_SETTINGS, normalizeSettings, localDateStr, inDateRange, matchesReceipt,
   decideAction, allowedIndexes, pickIndex, makeDedup, FEED_AND_CUT, LEVEL_LABEL
 };

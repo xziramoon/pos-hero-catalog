@@ -150,3 +150,23 @@ console.log('fortune.test.js OK' + (original ? '' : ' (skipped HEAD compare)'));
   assert.ok(rep2.includes('"document" → 2'));
   console.log('report OK');
 }
+
+// ---- ธีมไพ่ทำนาย (tarot) ----
+{
+  const deck = logic.TAROT_DECK;
+  assert.strictEqual(deck.length, 22);
+  deck.forEach((c, i) => {
+    assert.strictEqual(c.n, i + 1);
+    assert.ok(c.tarot.th && c.tarot.key && c.tarot.quote && c.tarot.lucky && c.tarot.color && c.tarot.en && c.tarot.roman);
+  });
+  const ts = logic.normalizeSettings({ theme: 'tarot', mode: 'on' });
+  assert.strictEqual(ts.theme, 'tarot');
+  assert.strictEqual(logic.activeTheme(ts, new Date(2026, 10, 24)), 'tarot'); // ไม่ถูกทับด้วยช่วงลอยกระทง
+  assert.strictEqual(logic.deckFor('tarot', fortunes), deck);
+  assert.strictEqual(logic.deckFor('newyear', fortunes), fortunes);
+  assert.ok(logic.renderOptions(ts).footer.includes('อึ้งลักเส็ง'));
+  for (let i = 0; i < 500; i++) assert.ok(logic.pickIndex(deck, ts) < 22);
+  const svgs = fs.readFileSync(path.join(__dirname, '..', 'fortune', 'tarot-cards.js'), 'utf8');
+  assert.strictEqual((svgs.match(/label:/g) || []).length, 22);
+  assert.ok(!/#(?!000|fff|FFF)[0-9a-fA-F]{3,6}/.test(svgs), 'ภาพไพ่ต้องขาวดำล้วน');
+}
